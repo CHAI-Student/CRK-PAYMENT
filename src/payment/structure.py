@@ -2,6 +2,8 @@ from functools import reduce
 import logging
 
 from construct import (
+    Enum,
+    Mapping,
     Adapter,
     Byte,
     Bytes,
@@ -12,7 +14,7 @@ from construct import (
     Struct,
 )
 
-from .const import MessageType
+from .const import ETX, STX, Construct_MessageType
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +46,17 @@ def seek_and_read(stream, offset, length):
 Length = BCD(Byte[2])
 
 Protocol = Struct(
-    Const(b"\x02"),
+    Const(STX),
     "length" / Rebuild(Length, lambda ctx: len(ctx.payload) + 9),
     "service_code" / PaddedString(2, "ascii"),
-    "message_type" / MessageType,
+    "message_type" / Construct_MessageType,
     "payload" / Bytes(lambda ctx: ctx.length - 9),
-    Const(b"\x03"),
+    Const(ETX),
     Checksum(
         Byte,
         lambda data: reduce(lambda x, y: x ^ y, data),
         lambda ctx: seek_and_read(ctx._io, 1, ctx.length - 2),
     ),
 )
+
+

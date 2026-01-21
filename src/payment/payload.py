@@ -1,28 +1,15 @@
-from construct import (
-    Byte,
-    Const,
-    Default,
-    GreedyBytes,
-    GreedyString,
-    If,
-    NullTerminated,
-    Optional,
-    PaddedString,
-    Struct,
-)
+from construct import (Byte, Const, GreedyBytes, GreedyString, If, Mapping,
+                       NullTerminated, PaddedString, Struct)
 
-from .const import ResponseCode, AuthorizationType, StatusCode
-
-Notification = Struct(
-    "response_code" / ResponseCode,
-    Const(b"\x1e"),
-    "message" / GreedyString("euc-kr"),
-)
+from .const import (FS, RS, Construct_AuthorizationType,
+                    Construct_ResponseCode, Construct_StatusCode)
 
 Error = Struct(
     "status" / Const(b"N"),
     Const(b"\x1c"),
-    "notification" / NullTerminated(Notification, term=b"\x1c"),
+    "response_code" / Construct_ResponseCode,
+    Const(b"\x1e"),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=b"\x1c"),
     # Const(b"\x1c"),
 )
 
@@ -40,177 +27,154 @@ CardInfo = Struct(
     "merchant_id" / GreedyString("ascii"),
 )
 
-PayloadStructures = {}
+AgeCheckRequest = Struct(
+    Const(FS),
+)
+AgeCheckResponse = Struct(
+    Const(FS),
+    "qr_data" / NullTerminated(GreedyBytes, term=FS),
+    # Const(b"\x1c"),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(b"\x1c"),
+)
 
-PayloadStructures["AC"] = AgeCheck = [
-    Struct(
-        Const(b"\x1c"),
-    ),
-    Struct(
-        Const(b"\x1c"),
-        "qr_data" / NullTerminated(GreedyBytes, term=b"\x1c"),
-        # Const(b"\x1c"),
-        "notification" / NullTerminated(Notification, term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
+TransactionTokenInitilizeRequest = Struct(
+    Const(FS),
+)
+TransactionTokenInitilizeResponse = Struct(
+    Const(FS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(b"\x1c"),
+)
 
-PayloadStructures["PR"] = RFIDCheck = [
-    Struct(
-        "data" / PaddedString(10, "ascii"),
-        Const(b"\x1c"),
-    )
-]
+TransactionTokenGenerateRequest = Struct(
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(b"\x1c"),
+)
+TransactionTokenGenerateResponse = Struct(
+    "status" / Construct_StatusCode,
+    Const(FS),
+    "vankey_hash" / If(lambda ctx: ctx.status == "Y", Byte[24]),
+    Const(FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    # Const(FS),
+    "response_code" / Construct_ResponseCode,
+    Const(RS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(FS),
+)
 
-PayloadStructures["PP"] = [
-    Struct(
-        Const(b"\x1c"),
-    ),
-    Struct(
-        Const(b"\x1c"),
-        "message" / NullTerminated(GreedyString("euc-kr"), term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
+TransactionTokenApproveRequest = Struct(
+    "amount" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
+    "vankey_hash" / Byte[24],
+    Const(FS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(FS),
+)
+TransactionTokenApproveResponse = Struct(
+    "status" / Construct_StatusCode,
+    Const(FS),
+    "authorization_number" / If(lambda ctx: ctx.status == "Y", Byte[8]),
+    Const(FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    # Const(FS),
+    "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
+    Const(FS),
+    "response_code" / Construct_ResponseCode,
+    Const(RS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(FS),
+)
 
-PayloadStructures["PS"] = PaymentTokenStart = [
-    Struct(
-        Const(b"\x1c"),
-    ),
-    Struct(
-        Const(b"\x1c"),
-        "message" / NullTerminated(GreedyString("euc-kr"), term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
+TransactionTokenCancelRequest = Struct(
+    "amount" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
+    "original_authorization_number" / Byte[8],
+    Const(FS),
+    "original_authorization_date" / PaddedString(6, "ascii"),
+    Const(FS),
+    "vankey_hash" / Byte[24],
+    Const(FS),
+)
+TransactionTokenCancelResponse = Struct(
+    "status" / Construct_StatusCode,
+    Const(FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    # Const(FS),
+    "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
+    Const(FS),
+    "response_code" / Construct_ResponseCode,
+    Const(RS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(FS),
+)
 
-PayloadStructures["TQ"] = PaymentTokenCreate = [
-    Struct(
-        "message" / NullTerminated(Default(GreedyString("euc-kr"), ""), term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-    Struct(
-        "status" / StatusCode,
-        Const(b"\x1c"),
-        "vankey_hash" / If(lambda ctx: ctx.status == "Y", Byte[24]),
-        Const(b"\x1c"),
-        "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "notification" / NullTerminated(Notification, term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
+TransactionRFIDInitilizeRequest = Struct(
+    "data" / PaddedString(10, "ascii"),
+    Const(FS),
+)
 
-PayloadStructures["D8"] = PaymentTokenApprove = [
-    Struct(
-        "amount" / NullTerminated(GreedyString("ascii"), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "vankey_hash" / Optional(Byte[24]),
-        Const(b"\x1c"),
-    ),
-    Struct(
-        "status" / StatusCode,
-        Const(b"\x1c"),
-        "authorization_number" / If(lambda ctx: ctx.status == "Y", Byte[8]),
-        Const(b"\x1c"),
-        "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "vankey" / Optional(Byte[16]),
-        Const(b"\x1c"),
-        "notification" / NullTerminated(Notification, term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
+TransactionSPayInitilizeRequest = Struct(
+    Const(FS),
+)
+TransactionSPayInitilizeResponse = Struct(
+    Const(FS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(b"\x1c"),
+)
 
-PayloadStructures["D9"] = PaymentTokenCancel = [
-    Struct(
-        "amount" / NullTerminated(GreedyString("ascii"), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "original_authorization_number" / Byte[8],
-        Const(b"\x1c"),
-        "original_authorization_date" / PaddedString(6, "ascii"),
-        Const(b"\x1c"),
-        "vankey_hash" / Optional(Byte[24]),
-        Const(b"\x1c"),
-    ),
-    Struct(
-        "status" / StatusCode,
-        Const(b"\x1c"),
-        "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
-        Const(b"\x1c"),
-        "notification" / NullTerminated(Notification, term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
+TransactionSPayApproveRequest = Struct(
+    "amount" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
+    "authorization_type" / Construct_AuthorizationType,
+    Const(FS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(FS),
+)
+TransactionSPayApproveResponse = Struct(
+    "status" / Construct_StatusCode,
+    Const(FS),
+    "authorization_number" / If(lambda ctx: ctx.status == "Y", Byte[8]),
+    Const(FS),
+    "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
+    Const(FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    # Const(FS),
+    "response_code" / Construct_ResponseCode,
+    Const(RS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(FS),
+)
 
-PayloadStructures["PA"] = PaymentSamsungStart = [
-    Struct(
-        Const(b"\x1c"),
-    ),
-    Struct(
-        Const(b"\x1c"),
-        "message" / NullTerminated(GreedyString("euc-kr"), term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
+TransactionSPayCancelRequest = Struct(
+    "amount" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
+    "original_authorization_number" / Byte[8],
+    Const(FS),
+    "original_authorization_date" / PaddedString(6, "ascii"),
+    Const(FS),
+    "vankey" / Byte[16],
+    Const(FS),
+)
+TransactionSPayCancelResponse = Struct(
+    "status" / Construct_StatusCode,
+    Const(FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    # Const(FS),
+    "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
+    Const(FS),
+    "response_code" / Construct_ResponseCode,
+    Const(RS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(FS),
+)
 
-PayloadStructures["D1"] = PaymentSamsungApprove = [
-    Struct(
-        "amount" / NullTerminated(GreedyString("ascii"), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "authorization_type" / AuthorizationType,
-        Const(b"\x1c"),
-        "message" / NullTerminated(GreedyString("euc-kr"), term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-    Struct(
-        "status" / StatusCode,
-        Const(b"\x1c"),
-        "authorization_number" / Optional(Byte[8]),
-        Const(b"\x1c"),
-        "vankey" / Optional(Byte[16]),
-        Const(b"\x1c"),
-        "card_info" / NullTerminated(Optional(CardInfo), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "notification" / NullTerminated(Notification, term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
-
-PayloadStructures["D7"] = PaymentSamsungCancel = [
-    Struct(
-        "amount" / NullTerminated(GreedyString("ascii"), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "original_authorization_number" / Byte[8],
-        Const(b"\x1c"),
-        "original_authorization_date" / PaddedString(6, "ascii"),
-        Const(b"\x1c"),
-        "vankey" / Optional(Byte[16]),
-        Const(b"\x1c"),
-    ),
-    Struct(
-        "status" / StatusCode,
-        Const(b"\x1c"),
-        "card_info" / NullTerminated(Optional(CardInfo), term=b"\x1c"),
-        # Const(b"\x1c"),
-        "vankey" / Optional(Byte[16]),
-        Const(b"\x1c"),
-        "notification" / NullTerminated(Notification, term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-]
-
-PayloadStructures["PC"] = DeviceCheck = [
-    Struct(
-        "message" / NullTerminated(GreedyString("euc-kr"), term=b"\x1c"),
-        # Const(b"\x1c"),
-    ),
-    Struct(
-        "response_code" / ResponseCode,
-        Const(b"\x1c"),
-    ),
-]
-
-ErrorPayload = Error
+DeviceCheckRequest = Struct(
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(b"\x1c"),
+)
+DeviceCheckResponse = Struct(
+    "response_code" / Construct_ResponseCode,
+    Const(FS),
+)
