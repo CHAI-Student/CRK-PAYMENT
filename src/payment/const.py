@@ -1,7 +1,7 @@
 from enum import Enum as PyEnum
-from typing import TypedDict
+from typing import Optional, TypedDict
 
-from construct import Byte, Bytes, Enum, Int16ub, Mapping
+from construct import Byte, Bytes, Mapping
 
 class ServiceCode(str, PyEnum):
     # TOKEN
@@ -29,7 +29,7 @@ class StatusCode(int, PyEnum):
 
 class AuthorizationType(int, PyEnum):
     PRE_AUTH = 0x00
-    APPROVAL = 0x01
+    PURCHASE = 0x01
 
 class ResponseCode(int, PyEnum):
     SUCCESS             = 0x00
@@ -51,6 +51,20 @@ class CardInfoData(TypedDict):
     ISSUER_ID: str
     ISSUER_NAME: str
     MERCHANT_ID: str
+
+def build_card_info_data(card_info) -> Optional[CardInfoData]:
+    if card_info is None:
+        return None
+    if isinstance(card_info, str):
+        return None
+    return CardInfoData(
+        SERIAL_NUMBER=card_info.serial_number,
+        ACQUIRER_ID=card_info.acquirer_id,
+        ACQUIRER_NAME=card_info.acquirer_name,
+        ISSUER_ID=card_info.issuer_id,
+        ISSUER_NAME=card_info.issuer_name,
+        MERCHANT_ID=card_info.merchant_id,
+    )
 
 STX = b"\x02"
 ETX = b"\x03"
@@ -95,6 +109,6 @@ Construct_AuthorizationType = Mapping(
     Byte,
     {
         AuthorizationType.PRE_AUTH: AuthorizationType.PRE_AUTH.value,
-        AuthorizationType.APPROVAL: AuthorizationType.APPROVAL.value,
+        AuthorizationType.PURCHASE: AuthorizationType.PURCHASE.value,
     }
 )

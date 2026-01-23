@@ -121,5 +121,11 @@ class Communication:
 
     async def fetch(self, message):
         async with self.lock:
+            try:
+                while True:
+                    self.rx_response_queue.get_nowait()
+            except asyncio.QueueEmpty:
+                # Consume all existing responses; ignore them
+                pass
             await self.tx_request_queue.put(message)
             return await self.rx_response_queue.get()

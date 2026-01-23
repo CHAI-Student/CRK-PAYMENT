@@ -1,16 +1,16 @@
-from typing import TypedDict, Literal, Optional
+from typing import TypedDict, Optional
 
-from .const import CardInfoData, ResponseCode
+from .const import CardInfoData, StatusCode, ResponseCode
 
 class TxTokenData(TypedDict):
-    status: Literal['Y', 'N']
+    status: StatusCode
     vankey_hash: Optional[str]
     card_info: Optional[CardInfoData]
     response_code: ResponseCode
     message: str
 
 class TxTokenApprovalData(TypedDict):
-    status: Literal['Y', 'N']
+    status: StatusCode
     authorization_number: Optional[str]
     card_info: Optional[CardInfoData]
     vankey: Optional[str]
@@ -18,14 +18,14 @@ class TxTokenApprovalData(TypedDict):
     message: str
 
 class TxTokenCancelData(TypedDict):
-    status: Literal['Y', 'N']
+    status: StatusCode
     card_info: Optional[CardInfoData]
     vankey: Optional[str]
     response_code: ResponseCode
     message: str
 
 class TxSPayApprovalData(TypedDict):
-    status: Literal['Y', 'N']
+    status: StatusCode
     authorization_number: Optional[str]
     card_info: Optional[CardInfoData]
     vankey: Optional[str]
@@ -33,7 +33,7 @@ class TxSPayApprovalData(TypedDict):
     message: str
 
 class TxSPayCancelData(TypedDict):
-    status: Literal['Y', 'N']
+    status: StatusCode
     card_info: Optional[CardInfoData]
     vankey: Optional[str]
     response_code: ResponseCode

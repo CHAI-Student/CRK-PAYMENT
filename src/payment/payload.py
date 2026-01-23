@@ -1,16 +1,28 @@
-from construct import (Byte, Const, GreedyBytes, GreedyString, If, Mapping,
-                       NullTerminated, PaddedString, Struct)
+from construct import (
+    Const,
+    GreedyBytes,
+    GreedyString,
+    NullTerminated,
+    PaddedString,
+    Select,
+    Struct,
+)
 
-from .const import (FS, RS, Construct_AuthorizationType,
-                    Construct_ResponseCode, Construct_StatusCode, StatusCode)
+from .const import (
+    FS,
+    RS,
+    Construct_AuthorizationType,
+    Construct_ResponseCode,
+    Construct_StatusCode,
+)
 
 Error = Struct(
     "status" / Const(b"N"),
-    Const(b"\x1c"),
+    Const(FS),
     "response_code" / Construct_ResponseCode,
-    Const(b"\x1e"),
-    "message" / NullTerminated(GreedyString("euc-kr"), term=b"\x1c"),
-    # Const(b"\x1c"),
+    Const(RS),
+    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    # Const(FS),
 )
 
 CardInfo = Struct(
@@ -33,9 +45,9 @@ AgeCheckRequest = Struct(
 AgeCheckResponse = Struct(
     Const(FS),
     "qr_data" / NullTerminated(GreedyBytes, term=FS),
-    # Const(b"\x1c"),
+    # Const(FS),
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
-    # Const(b"\x1c"),
+    # Const(FS),
 )
 
 TransactionTokenInitilizeRequest = Struct(
@@ -44,19 +56,19 @@ TransactionTokenInitilizeRequest = Struct(
 TransactionTokenInitilizeResponse = Struct(
     Const(FS),
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
-    # Const(b"\x1c"),
+    # Const(FS),
 )
 
 TransactionTokenGenerateRequest = Struct(
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
-    # Const(b"\x1c"),
+    # Const(FS),
 )
 TransactionTokenGenerateResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "vankey_hash" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(24, "ascii")),
-    Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
+    "vankey_hash" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
+    "card_info" / NullTerminated(Select(CardInfo, GreedyString("ascii")), term=FS),
     # Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
@@ -67,20 +79,20 @@ TransactionTokenGenerateResponse = Struct(
 TransactionTokenApproveRequest = Struct(
     "amount" / NullTerminated(GreedyString("ascii"), term=FS),
     # Const(FS),
-    "vankey_hash" / PaddedString(24, "ascii"),
-    Const(FS),
+    "vankey_hash" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
     # Const(FS),
 )
 TransactionTokenApproveResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "authorization_number" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(8, "ascii")),
-    Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
+    "authorization_number" / NullTerminated(GreedyString("ascii"), term=FS),
     # Const(FS),
-    "vankey" / PaddedString(16, "ascii"),
-    Const(FS),
+    "card_info" / NullTerminated(Select(CardInfo, GreedyString("ascii")), term=FS),
+    # Const(FS),
+    "vankey" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
@@ -100,10 +112,10 @@ TransactionTokenCancelRequest = Struct(
 TransactionTokenCancelResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
+    "card_info" / NullTerminated(Select(CardInfo, GreedyString("ascii")), term=FS),
     # Const(FS),
-    "vankey" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(16, "ascii")),
-    Const(FS),
+    "vankey" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
@@ -121,7 +133,7 @@ TransactionSPayInitilizeRequest = Struct(
 TransactionSPayInitilizeResponse = Struct(
     Const(FS),
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
-    # Const(b"\x1c"),
+    # Const(FS),
 )
 
 TransactionSPayApproveRequest = Struct(
@@ -135,11 +147,11 @@ TransactionSPayApproveRequest = Struct(
 TransactionSPayApproveResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "authorization_number" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(8, "ascii")),
-    Const(FS),
-    "vankey" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(16, "ascii")),
-    Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
+    "authorization_number" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
+    "vankey" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
+    "card_info" / NullTerminated(Select(CardInfo, GreedyString("ascii")), term=FS),
     # Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
@@ -160,10 +172,10 @@ TransactionSPayCancelRequest = Struct(
 TransactionSPayCancelResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
+    "card_info" / NullTerminated(Select(CardInfo, GreedyString("ascii")), term=FS),
     # Const(FS),
-    "vankey" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(16, "ascii")),
-    Const(FS),
+    "vankey" / NullTerminated(GreedyString("ascii"), term=FS),
+    # Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
@@ -172,7 +184,7 @@ TransactionSPayCancelResponse = Struct(
 
 DeviceCheckRequest = Struct(
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
-    # Const(b"\x1c"),
+    # Const(FS),
 )
 DeviceCheckResponse = Struct(
     "response_code" / Construct_ResponseCode,

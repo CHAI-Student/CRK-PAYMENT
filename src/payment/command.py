@@ -9,7 +9,12 @@ from .payment_types import (
     TxTokenData,
 )
 
-from .const import AuthorizationType, MessageType, ServiceCode, StatusCode
+from .const import (
+    AuthorizationType,
+    MessageType,
+    ServiceCode,
+    build_card_info_data,
+)
 from .manager import Communication
 from .payload import (
     DeviceCheckRequest,
@@ -79,12 +84,8 @@ async def send_tx_token_generate(comm: Communication) -> TxTokenData:
     response_payload = TransactionTokenGenerateResponse.parse(response.payload)
     return TxTokenData(
         status=response_payload.status,
-        vankey_hash=(
-            response_payload.vankey_hash if response_payload.status == StatusCode.Y else None
-        ),
-        card_info=(
-            response_payload.card_info if response_payload.status == StatusCode.Y else None
-        ),
+        vankey_hash=response_payload.vankey_hash,
+        card_info=build_card_info_data(response_payload.card_info),
         response_code=response_payload.response_code,
         message=response_payload.message,
     )
@@ -114,15 +115,9 @@ async def send_tx_token_approve(
     response_payload = TransactionTokenApproveResponse.parse(response.payload)
     return TxTokenApprovalData(
         status=response_payload.status,
-        authorization_number=(
-            response_payload.authorization_number
-            if response_payload.status == StatusCode.Y
-            else None
-        ),
-        card_info=(
-            response_payload.card_info if response_payload.status == StatusCode.Y else None
-        ),
-        vankey=response_payload.vankey if response_payload.status == StatusCode.Y else None,
+        authorization_number=response_payload.authorization_number,
+        card_info=build_card_info_data(response_payload.card_info),
+        vankey=response_payload.vankey,
         response_code=response_payload.response_code,
         message=response_payload.message,
     )
@@ -157,23 +152,25 @@ async def send_tx_token_cancel(
     response_payload = TransactionTokenCancelResponse.parse(response.payload)
     return TxTokenCancelData(
         status=response_payload.status,
-        card_info=(
-            response_payload.card_info if response_payload.status == StatusCode.Y else None
-        ),
-        vankey=response_payload.vankey if response_payload.status == StatusCode.Y else None,
+        card_info=build_card_info_data(response_payload.card_info),
+        vankey=response_payload.vankey,
         response_code=response_payload.response_code,
         message=response_payload.message,
     )
 
 
 async def send_tx_spay_approve(
-    comm: Communication, amount: str, authorization_type: AuthorizationType
+    comm: Communication,
+    amount: str,
+    authorization_type: AuthorizationType,
+    display_message: str = "",
 ) -> TxSPayApprovalData:
     # TODO: implement amount assertion for digit 0-9 only
     request_payload = TransactionSPayApproveRequest.build(
         {
             "amount": amount,
             "authorization_type": authorization_type,
+            "message": display_message,
         }
     )
     request = Protocol.build(
@@ -187,17 +184,13 @@ async def send_tx_spay_approve(
     assert response.service_code == ServiceCode.TX_SPAY_APPROVE.value
     assert response.message_type == MessageType.RESPONSE
     response_payload = TransactionSPayApproveResponse.parse(response.payload)
+    print(response_payload)
+    print(response_payload.vankey)
     return TxSPayApprovalData(
         status=response_payload.status,
-        authorization_number=(
-            response_payload.authorization_number
-            if response_payload.status == StatusCode.Y
-            else None
-        ),
-        card_info=(
-            response_payload.card_info if response_payload.status == StatusCode.Y else None
-        ),
-        vankey=response_payload.vankey if response_payload.status == StatusCode.Y else None,
+        authorization_number=response_payload.authorization_number,
+        card_info=build_card_info_data(response_payload.card_info),
+        vankey=response_payload.vankey,
         response_code=response_payload.response_code,
         message=response_payload.message,
     )
@@ -206,9 +199,9 @@ async def send_tx_spay_approve(
 async def send_tx_spay_cancel(
     comm: Communication,
     amount: str,
-    original_authorization_number: bytes,
+    original_authorization_number: str,
     original_authorization_date: str,
-    vankey: bytes,
+    vankey: str,
 ) -> TxSPayCancelData:
     # TODO: implement amount assertion for digit 0-9 only
     request_payload = TransactionSPayCancelRequest.build(
@@ -232,10 +225,8 @@ async def send_tx_spay_cancel(
     response_payload = TransactionSPayCancelResponse.parse(response.payload)
     return TxSPayCancelData(
         status=response_payload.status,
-        card_info=(
-            response_payload.card_info if response_payload.status == StatusCode.Y else None
-        ),
-        vankey=response_payload.vankey if response_payload.status == StatusCode.Y else None,
+        card_info=build_card_info_data(response_payload.card_info),
+        vankey=response_payload.vankey,
         response_code=response_payload.response_code,
         message=response_payload.message,
     )

@@ -2,3 +2,4 @@ construct
 fastapi
 pydantic
 uvicorn
+aiosqlite

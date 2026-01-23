@@ -2,9 +2,10 @@ import asyncio
 import logging
 
 from api.manager import sse_queue
-from payment.const import ServiceCode
+from api.schemas import RFIDStream, TokenGeneratedStream
+from payment.const import ServiceCode, StatusCode
 from payment.manager import Communication
-from payment.parse import retrieve_request, send_tx_token_generate
+from payment.command import retrieve_request, send_tx_token_generate
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +24,13 @@ class Action:
                 # TODO: check if status is 'Y' and handle errors accordingly
                 await sse_queue.put({
                     "event": "tx_token_generate",
-                    "data": tx_token_data,
+                    "data": TokenGeneratedStream(
+                        status='Y' if tx_token_data["status"] == StatusCode.Y else 'N',
+                        vankey_hash=tx_token_data["vankey_hash"],
+                        card_info=tx_token_data["card_info"],
+                        response_code=tx_token_data["response_code"],
+                        message=tx_token_data["message"],
+                    ).model_dump(),
                 })
             
             elif message.service_code == ServiceCode.TX_SPAY_INIT.value:
@@ -35,7 +42,7 @@ class Action:
             elif message.service_code == ServiceCode.TX_RFID_INIT.value:
                 await sse_queue.put({
                     "event": "rfid_init",
-                    "data": payload.data,
+                    "data": RFIDStream(data=payload.data).model_dump(),
                 })
             
             else:

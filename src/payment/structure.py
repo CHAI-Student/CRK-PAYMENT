@@ -1,9 +1,7 @@
-from functools import reduce
 import logging
+from functools import reduce
 
 from construct import (
-    Enum,
-    Mapping,
     Adapter,
     Byte,
     Bytes,
@@ -17,6 +15,7 @@ from construct import (
 from .const import ETX, STX, Construct_MessageType
 
 logger = logging.getLogger(__name__)
+
 
 class BCD(Adapter):
     def _encode(self, obj, context, path):
@@ -43,6 +42,7 @@ def seek_and_read(stream, offset, length):
     stream.seek(org_pos)
     return data
 
+
 Length = BCD(Byte[2])
 
 Protocol = Struct(
@@ -58,5 +58,3 @@ Protocol = Struct(
         lambda ctx: seek_and_read(ctx._io, 1, ctx.length - 2),
     ),
 )
-
-
