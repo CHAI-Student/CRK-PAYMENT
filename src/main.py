@@ -4,6 +4,7 @@ import sys
 
 from datetime import datetime
 
+from action.manager import Action
 from api.manager import serve_api
 from payment import Communication
 
@@ -21,6 +22,10 @@ async def run_cat_server(comm: Communication):
     except Exception as e:
         print(f"Server error: {e}")
 
+async def run_action_manager(comm: Communication):
+    action_manager = Action(comm)
+    await action_manager.run()
+
 async def run_api_server(comm: Communication):
     await serve_api(comm, host="127.0.0.1", port=8001, log_level="info")
 
@@ -28,6 +33,7 @@ async def main():
     comm = Communication()
     await asyncio.gather(
         run_cat_server(comm),
+        run_action_manager(comm),
         run_api_server(comm),
     )
 

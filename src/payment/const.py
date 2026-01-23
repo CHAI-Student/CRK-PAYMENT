@@ -5,7 +5,7 @@ from construct import Byte, Bytes, Enum, Int16ub, Mapping
 
 class ServiceCode(str, PyEnum):
     # TOKEN
-    TX_TOKEN_REQUEST = "PS"
+    TX_TOKEN_INIT = "PS"
     TX_TOKEN_GENERATE = "TQ"
     TX_TOKEN_APPROVE = "D8"
     TX_TOKEN_CANCEL = "D9"

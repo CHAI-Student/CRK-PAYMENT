@@ -2,7 +2,7 @@ from construct import (Byte, Const, GreedyBytes, GreedyString, If, Mapping,
                        NullTerminated, PaddedString, Struct)
 
 from .const import (FS, RS, Construct_AuthorizationType,
-                    Construct_ResponseCode, Construct_StatusCode)
+                    Construct_ResponseCode, Construct_StatusCode, StatusCode)
 
 Error = Struct(
     "status" / Const(b"N"),
@@ -14,16 +14,16 @@ Error = Struct(
 )
 
 CardInfo = Struct(
-    "serial_number" / NullTerminated(GreedyString("ascii"), term=b"\x1e"),
-    # Const(b"\x1e"),
-    "acquirer_id" / PaddedString(3, "ascii"),
-    Const(b"\x1e"),
-    "acquirer_name" / NullTerminated(GreedyString("euc-kr"), term=b"\x1e"),
-    # Const(b"\x1e"),
-    "issuer_id" / PaddedString(3, "ascii"),
-    Const(b"\x1e"),
-    "issuer_name" / NullTerminated(GreedyString("euc-kr"), term=b"\x1e"),
-    # Const(b"\x1e"),
+    "serial_number" / NullTerminated(GreedyString("ascii"), term=RS),
+    # Const(RS),
+    "acquirer_id" / NullTerminated(GreedyString("ascii"), term=RS),
+    # Const(RS),
+    "acquirer_name" / NullTerminated(GreedyString("euc-kr"), term=RS),
+    # Const(RS),
+    "issuer_id" / NullTerminated(GreedyString("ascii"), term=RS),
+    # Const(RS),
+    "issuer_name" / NullTerminated(GreedyString("euc-kr"), term=RS),
+    # Const(RS),
     "merchant_id" / GreedyString("ascii"),
 )
 
@@ -54,9 +54,9 @@ TransactionTokenGenerateRequest = Struct(
 TransactionTokenGenerateResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "vankey_hash" / If(lambda ctx: ctx.status == "Y", Byte[24]),
+    "vankey_hash" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(24, "ascii")),
     Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
     # Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
@@ -67,7 +67,7 @@ TransactionTokenGenerateResponse = Struct(
 TransactionTokenApproveRequest = Struct(
     "amount" / NullTerminated(GreedyString("ascii"), term=FS),
     # Const(FS),
-    "vankey_hash" / Byte[24],
+    "vankey_hash" / PaddedString(24, "ascii"),
     Const(FS),
     "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
     # Const(FS),
@@ -75,11 +75,11 @@ TransactionTokenApproveRequest = Struct(
 TransactionTokenApproveResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "authorization_number" / If(lambda ctx: ctx.status == "Y", Byte[8]),
+    "authorization_number" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(8, "ascii")),
     Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
     # Const(FS),
-    "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
+    "vankey" / PaddedString(16, "ascii"),
     Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
@@ -90,19 +90,19 @@ TransactionTokenApproveResponse = Struct(
 TransactionTokenCancelRequest = Struct(
     "amount" / NullTerminated(GreedyString("ascii"), term=FS),
     # Const(FS),
-    "original_authorization_number" / Byte[8],
+    "original_authorization_number" / PaddedString(8, "ascii"),
     Const(FS),
     "original_authorization_date" / PaddedString(6, "ascii"),
     Const(FS),
-    "vankey_hash" / Byte[24],
+    "vankey_hash" / PaddedString(24, "ascii"),
     Const(FS),
 )
 TransactionTokenCancelResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
     # Const(FS),
-    "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
+    "vankey" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(16, "ascii")),
     Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
@@ -135,11 +135,11 @@ TransactionSPayApproveRequest = Struct(
 TransactionSPayApproveResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "authorization_number" / If(lambda ctx: ctx.status == "Y", Byte[8]),
+    "authorization_number" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(8, "ascii")),
     Const(FS),
-    "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
+    "vankey" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(16, "ascii")),
     Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
     # Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
@@ -150,19 +150,19 @@ TransactionSPayApproveResponse = Struct(
 TransactionSPayCancelRequest = Struct(
     "amount" / NullTerminated(GreedyString("ascii"), term=FS),
     # Const(FS),
-    "original_authorization_number" / Byte[8],
+    "original_authorization_number" / PaddedString(8, "ascii"),
     Const(FS),
     "original_authorization_date" / PaddedString(6, "ascii"),
     Const(FS),
-    "vankey" / Byte[16],
+    "vankey" / PaddedString(16, "ascii"),
     Const(FS),
 )
 TransactionSPayCancelResponse = Struct(
     "status" / Construct_StatusCode,
     Const(FS),
-    "card_info" / NullTerminated(If(lambda ctx: ctx.status == "Y", CardInfo), term=FS),
+    "card_info" / NullTerminated(If(lambda ctx: ctx.status == StatusCode.Y, CardInfo), term=FS),
     # Const(FS),
-    "vankey" / If(lambda ctx: ctx.status == "Y", Byte[16]),
+    "vankey" / If(lambda ctx: ctx.status == StatusCode.Y, PaddedString(16, "ascii")),
     Const(FS),
     "response_code" / Construct_ResponseCode,
     Const(RS),
