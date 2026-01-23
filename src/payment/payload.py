@@ -16,7 +16,7 @@ from .const import (
     Construct_StatusCode,
 )
 
-Error = Struct(
+ErrorPayload = Struct(
     "status" / Const(b"N"),
     Const(FS),
     "response_code" / Construct_ResponseCode,

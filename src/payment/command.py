@@ -18,6 +18,8 @@ Timeout behavior:
 import asyncio
 import logging
 
+from construct import ConstructError
+
 from config import settings
 from exceptions import ProtocolError, TimeoutError, ValidationError
 
@@ -40,6 +42,7 @@ from .manager import Communication
 from .payload import (
     DeviceCheckRequest,
     DeviceCheckResponse,
+    ErrorPayload,
     TransactionSPayApproveRequest,
     TransactionSPayApproveResponse,
     TransactionSPayCancelRequest,
@@ -243,7 +246,12 @@ async def send_tx_token_generate(
     response = await comm.fetch(request, timeout=timeout)
     _validate_response(response, ServiceCode.TX_TOKEN_GENERATE)
     
-    response_payload = TransactionTokenGenerateResponse.parse(response.payload)
+    try:
+        response_payload = TransactionTokenGenerateResponse.parse(response.payload)
+    except ConstructError as e:       
+        raise ProtocolError(
+            response.payload.decode('euc-kr', errors='ignore')
+        ) from e
     
     logger.info(
         "Token generated",
@@ -311,7 +319,12 @@ async def send_tx_token_approve(
     response = await comm.fetch(request, timeout=timeout)
     _validate_response(response, ServiceCode.TX_TOKEN_APPROVE)
     
-    response_payload = TransactionTokenApproveResponse.parse(response.payload)
+    try:
+        response_payload = TransactionTokenApproveResponse.parse(response.payload)
+    except ConstructError as e:
+        raise ProtocolError(
+            response.payload.decode('euc-kr', errors='ignore')
+        ) from e  
     
     logger.info(
         "Token payment approved",
@@ -392,7 +405,12 @@ async def send_tx_token_cancel(
     response = await comm.fetch(request, timeout=timeout)
     _validate_response(response, ServiceCode.TX_TOKEN_CANCEL)
     
-    response_payload = TransactionTokenCancelResponse.parse(response.payload)
+    try:
+        response_payload = TransactionTokenCancelResponse.parse(response.payload)
+    except ConstructError as e:
+        raise ProtocolError(
+            response.payload.decode('euc-kr', errors='ignore')
+        ) from e  
     
     logger.info(
         "Token payment cancelled",
@@ -466,7 +484,12 @@ async def send_tx_spay_approve(
     response = await comm.fetch(request, timeout=timeout)
     _validate_response(response, ServiceCode.TX_SPAY_APPROVE)
     
-    response_payload = TransactionSPayApproveResponse.parse(response.payload)
+    try:
+        response_payload = TransactionSPayApproveResponse.parse(response.payload)
+    except ConstructError as e:
+        raise ProtocolError(
+            response.payload.decode('euc-kr', errors='ignore')
+        ) from e  
     
     logger.info(
         "Samsung Pay approved",
@@ -547,8 +570,14 @@ async def send_tx_spay_cancel(
     
     response = await comm.fetch(request, timeout=timeout)
     _validate_response(response, ServiceCode.TX_SPAY_CANCEL)
+
+    try:
+        response_payload = TransactionSPayCancelResponse.parse(response.payload)
+    except ConstructError as e:
+        raise ProtocolError(
+            response.payload.decode('euc-kr', errors='ignore')
+        ) from e  
     
-    response_payload = TransactionSPayCancelResponse.parse(response.payload)
     
     logger.info(
         "Samsung Pay cancelled",
@@ -602,9 +631,15 @@ async def send_device_check(
     )
     
     response = await comm.fetch(request, timeout=timeout)
-    _validate_response(response, ServiceCode.DEVICE_CHECK)
+
     
-    response_payload = DeviceCheckResponse.parse(response.payload)
+    try:
+        response_payload = DeviceCheckResponse.parse(response.payload)
+    except ConstructError as e:
+        raise ProtocolError(
+            response.payload.decode('euc-kr', errors='ignore')
+        ) from e  
+        
     
     logger.info(
         "Device check complete",
