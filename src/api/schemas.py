@@ -144,6 +144,38 @@ class PaymentTokenApproveResponse(BaseModel):
         response_code: Device response code
         message: Human-readable message
     """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "Y",
+                    "authorization_number": "12345678",
+                    "authorization_date": "260123",
+                    "card_info": {
+                        "SERIAL_NUMBER": "1234567890123456",
+                        "ACQUIRER_ID": "001",
+                        "ACQUIRER_NAME": "신한카드",
+                        "ISSUER_ID": "002",
+                        "ISSUER_NAME": "KB국민카드",
+                        "MERCHANT_ID": "MERCHANT001"
+                    },
+                    "vankey": "VANKEY1234567890ABCDEFGH",
+                    "response_code": 0,
+                    "message": "Approved"
+                },
+                {
+                    "status": "N",
+                    "authorization_number": None,
+                    "authorization_date": "260123",
+                    "card_info": None,
+                    "vankey": None,
+                    "response_code": 201,
+                    "message": "Declined - Insufficient funds"
+                }
+            ]
+        }
+    )
+    
     status: str
     authorization_number: Optional[str]
     authorization_date: str
@@ -229,6 +261,34 @@ class PaymentTokenCancelResponse(BaseModel):
         response_code: Device response code
         message: Human-readable message
     """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "Y",
+                    "card_info": {
+                        "SERIAL_NUMBER": "1234567890123456",
+                        "ACQUIRER_ID": "001",
+                        "ACQUIRER_NAME": "신한카드",
+                        "ISSUER_ID": "002",
+                        "ISSUER_NAME": "KB국민카드",
+                        "MERCHANT_ID": "MERCHANT001"
+                    },
+                    "vankey": "VANKEY1234567890ABCDEFGH",
+                    "response_code": 0,
+                    "message": "Cancellation approved"
+                },
+                {
+                    "status": "N",
+                    "card_info": None,
+                    "vankey": None,
+                    "response_code": 301,
+                    "message": "Original transaction not found"
+                }
+            ]
+        }
+    )
+    
     status: str
     card_info: Optional[CardInfoData]
     vankey: Optional[str]
@@ -307,6 +367,38 @@ class SamsungPayApproveResponse(BaseModel):
         response_code: Device response code
         message: Human-readable message
     """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "Y",
+                    "authorization_number": "87654321",
+                    "authorization_date": "260123",
+                    "card_info": {
+                        "SERIAL_NUMBER": "9876543210987654",
+                        "ACQUIRER_ID": "003",
+                        "ACQUIRER_NAME": "우리카드",
+                        "ISSUER_ID": "004",
+                        "ISSUER_NAME": "하나카드",
+                        "MERCHANT_ID": "MERCHANT002"
+                    },
+                    "vankey": "SPAYKEY98765ABCDEFGH1234",
+                    "response_code": 0,
+                    "message": "Approved"
+                },
+                {
+                    "status": "N",
+                    "authorization_number": None,
+                    "authorization_date": "260123",
+                    "card_info": None,
+                    "vankey": None,
+                    "response_code": 202,
+                    "message": "Card declined - Contact issuer"
+                }
+            ]
+        }
+    )
+    
     status: str
     authorization_number: Optional[str]
     authorization_date: str
@@ -392,6 +484,34 @@ class SamsungPayCancelResponse(BaseModel):
         response_code: Device response code
         message: Human-readable message
     """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "status": "Y",
+                    "card_info": {
+                        "SERIAL_NUMBER": "9876543210987654",
+                        "ACQUIRER_ID": "003",
+                        "ACQUIRER_NAME": "우리카드",
+                        "ISSUER_ID": "004",
+                        "ISSUER_NAME": "하나카드",
+                        "MERCHANT_ID": "MERCHANT002"
+                    },
+                    "vankey": "SPAYKEY98765ABCDEFGH1234",
+                    "response_code": 0,
+                    "message": "Cancellation approved"
+                },
+                {
+                    "status": "N",
+                    "card_info": None,
+                    "vankey": None,
+                    "response_code": 302,
+                    "message": "Cancellation period expired"
+                }
+            ]
+        }
+    )
+    
     status: str
     card_info: Optional[CardInfoData]
     vankey: Optional[str]

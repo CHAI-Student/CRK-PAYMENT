@@ -163,6 +163,7 @@ async def run_action_manager(
 
 async def run_api_server(
     comm: Communication,
+    sse_queue: asyncio.Queue,
     shutdown_event: asyncio.Event,
 ) -> None:
     """
@@ -174,6 +175,7 @@ async def run_api_server(
     """
     await serve_api(
         comm=comm,
+        sse_queue=sse_queue,
         shutdown_event=shutdown_event,
         host=settings.api_host,
         port=settings.api_port,
@@ -259,7 +261,7 @@ async def main() -> None:
     _tasks.add(action_task)
     
     api_task = asyncio.create_task(
-        run_api_server(comm, _shutdown_event),
+        run_api_server(comm, sse_queue, _shutdown_event),
         name="api_server"
     )
     _tasks.add(api_task)

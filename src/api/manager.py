@@ -239,6 +239,33 @@ app.add_exception_handler(Exception, generic_exception_handler)
     tags=["Status"],
     summary="Device health check",
     description="Check CAT device connectivity and readiness",
+    responses={
+        200: {
+            "description": "Device is connected and ready",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "success": {
+                            "summary": "Device connected",
+                            "value": {
+                                "status": "ok",
+                                "response_code": 0x00,
+                                "message": "SUCCESS"
+                            }
+                        },
+                        "device_error": {
+                            "summary": "Device not responding",
+                            "value": {
+                                "status": "error",
+                                "response_code": 0xC1,
+                                "message": "NETWORK_ERROR"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 async def get_status(request: Request) -> dict:
     """
@@ -268,6 +295,74 @@ async def get_status(request: Request) -> dict:
     tags=["Token Payment"],
     summary="Approve token payment",
     description="Initiate a token-based payment transaction with the CAT device",
+    responses={
+        200: {
+            "description": "Payment approved or declined",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "approved": {
+                            "summary": "Payment approved",
+                            "value": {
+                                "status": "Y",
+                                "authorization_number": "12345678",
+                                "authorization_date": "260123",
+                                "card_info": {
+                                    "SERIAL_NUMBER": "1234567890123456",
+                                    "ACQUIRER_ID": "001",
+                                    "ACQUIRER_NAME": "신한카드",
+                                    "ISSUER_ID": "002",
+                                    "ISSUER_NAME": "KB국민카드",
+                                    "MERCHANT_ID": "1234567890"
+                                },
+                                "vankey": "VANKEY1234567890ABCDEFGH",
+                                "response_code": 0x00,
+                                "message": "Approved"
+                            }
+                        },
+                        "declined": {
+                            "summary": "Payment declined",
+                            "value": {
+                                "status": "N",
+                                "authorization_number": None,
+                                "authorization_date": "260123",
+                                "card_info": None,
+                                "vankey": None,
+                                "response_code": 0xB2,
+                                "message": "Declined - Insufficient funds"
+                            }
+                        },
+                        "timeout": {
+                            "summary": "Transaction timeout",
+                            "value": {
+                                "status": "N",
+                                "authorization_number": None,
+                                "authorization_date": "260123",
+                                "card_info": None,
+                                "vankey": None,
+                                "response_code": 0xB0,
+                                "message": "Transaction timeout"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Validation error",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "urn:payment-gateway:error:validation",
+                        "title": "Validation Error",
+                        "status": 400,
+                        "detail": "Amount must be exactly 9 digits",
+                        "instance": "/payment/token/approve"
+                    }
+                }
+            }
+        }
+    }
 )
 async def approve_token_payment(
     request: Request,
@@ -323,6 +418,58 @@ async def approve_token_payment(
     tags=["Token Payment"],
     summary="Cancel token payment",
     description="Cancel a previously approved token payment transaction",
+    responses={
+        200: {
+            "description": "Cancellation approved or declined",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "approved": {
+                            "summary": "Cancellation approved",
+                            "value": {
+                                "status": "Y",
+                                "card_info": {
+                                    "SERIAL_NUMBER": "1234567890123456",
+                                    "ACQUIRER_ID": "001",
+                                    "ACQUIRER_NAME": "신한카드",
+                                    "ISSUER_ID": "002",
+                                    "ISSUER_NAME": "KB국민카드",
+                                    "MERCHANT_ID": "MERCHANT001"
+                                },
+                                "vankey": "VANKEY1234567890ABCDEFGH",
+                                "response_code": 0x00,
+                                "message": "Cancellation approved"
+                            }
+                        },
+                        "not_found": {
+                            "summary": "Original transaction not found",
+                            "value": {
+                                "status": "N",
+                                "card_info": None,
+                                "vankey": None,
+                                "response_code": 0xB2,
+                                "message": "Original transaction not found"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Validation error",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "urn:payment-gateway:error:validation",
+                        "title": "Validation Error",
+                        "status": 400,
+                        "detail": "Authorization date must be in YYMMDD format",
+                        "instance": "/payment/token/cancel"
+                    }
+                }
+            }
+        }
+    }
 )
 async def cancel_token_payment(
     request: Request,
@@ -384,6 +531,74 @@ async def cancel_token_payment(
     tags=["Samsung Pay"],
     summary="Approve Samsung Pay payment",
     description="Initiate a Samsung Pay transaction with the CAT device",
+    responses={
+        200: {
+            "description": "Samsung Pay transaction approved or declined",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "approved": {
+                            "summary": "Payment approved",
+                            "value": {
+                                "status": "Y",
+                                "authorization_number": "87654321",
+                                "authorization_date": "260123",
+                                "card_info": {
+                                    "SERIAL_NUMBER": "9876543210987654",
+                                    "ACQUIRER_ID": "003",
+                                    "ACQUIRER_NAME": "우리카드",
+                                    "ISSUER_ID": "004",
+                                    "ISSUER_NAME": "하나카드",
+                                    "MERCHANT_ID": "MERCHANT002"
+                                },
+                                "vankey": "SPAYKEY98765ABCDEFGH1234",
+                                "response_code": 0,
+                                "message": "Approved"
+                            }
+                        },
+                        "declined": {
+                            "summary": "Payment declined",
+                            "value": {
+                                "status": "N",
+                                "authorization_number": None,
+                                "authorization_date": "260123",
+                                "card_info": None,
+                                "vankey": None,
+                                "response_code": 0xB2,
+                                "message": "Card declined - Contact issuer"
+                            }
+                        },
+                        "user_cancelled": {
+                            "summary": "User cancelled transaction",
+                            "value": {
+                                "status": "N",
+                                "authorization_number": None,
+                                "authorization_date": "260123",
+                                "card_info": None,
+                                "vankey": None,
+                                "response_code": 0xB1,
+                                "message": "Transaction cancelled by user"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Validation error",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "urn:payment-gateway:error:validation",
+                        "title": "Validation Error",
+                        "status": 400,
+                        "detail": "Authorization type must be PRE_AUTH or PURCHASE",
+                        "instance": "/payment/samsung-pay/approve"
+                    }
+                }
+            }
+        }
+    }
 )
 async def approve_samsung_pay(
     request: Request,
@@ -440,6 +655,58 @@ async def approve_samsung_pay(
     tags=["Samsung Pay"],
     summary="Cancel Samsung Pay payment",
     description="Cancel a previously approved Samsung Pay transaction",
+    responses={
+        200: {
+            "description": "Samsung Pay cancellation approved or declined",
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "approved": {
+                            "summary": "Cancellation approved",
+                            "value": {
+                                "status": "Y",
+                                "card_info": {
+                                    "SERIAL_NUMBER": "9876543210987654",
+                                    "ACQUIRER_ID": "003",
+                                    "ACQUIRER_NAME": "우리카드",
+                                    "ISSUER_ID": "004",
+                                    "ISSUER_NAME": "하나카드",
+                                    "MERCHANT_ID": "MERCHANT002"
+                                },
+                                "vankey": "SPAYKEY98765ABCDEFGH1234",
+                                "response_code": 0x00,
+                                "message": "Cancellation approved"
+                            }
+                        },
+                        "expired": {
+                            "summary": "Cancellation period expired",
+                            "value": {
+                                "status": "N",
+                                "card_info": None,
+                                "vankey": None,
+                                "response_code": 0xB0,
+                                "message": "Cancellation period expired"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        400: {
+            "description": "Validation error",
+            "content": {
+                "application/problem+json": {
+                    "example": {
+                        "type": "urn:payment-gateway:error:validation",
+                        "title": "Validation Error",
+                        "status": 400,
+                        "detail": "VAN key must be exactly 24 characters",
+                        "instance": "/payment/samsung-pay/cancel"
+                    }
+                }
+            }
+        }
+    }
 )
 async def cancel_samsung_pay(
     request: Request,
@@ -495,7 +762,7 @@ async def cancel_samsung_pay(
 
 
 @app.get(
-    "/events",
+    "/sse",
     tags=["Events"],
     summary="SSE event stream",
     description="Server-Sent Events stream for device-initiated events",
@@ -566,7 +833,7 @@ async def event_stream(request: Request) -> StreamingResponse:
                         app_state.sse_queue.get(),
                         timeout=1.0
                     )
-                    yield f"data: {json.dumps(event)}\n\n"
+                    yield f"event: {event["event"]}\ndata: {json.dumps(event["data"])}\n\n"
                 except asyncio.TimeoutError:
                     # Check if client disconnected
                     if await request.is_disconnected():
@@ -635,6 +902,16 @@ class GracefulServer(Server):
         await self._external_shutdown.wait()
         logger.info("External shutdown signal received, stopping API server")
         self.should_exit = True
+    
+    async def shutdown(self, sockets=None):
+        """
+        Override shutdown to set external shutdown event.
+        
+        Args:
+            sockets: Optional pre-bound sockets
+        """
+        self._external_shutdown.set()
+        await super().shutdown(sockets)
 
 
 # ============================================================================
@@ -644,6 +921,7 @@ class GracefulServer(Server):
 
 async def serve_api(
     comm: Communication,
+    sse_queue: asyncio.Queue,
     shutdown_event: asyncio.Event,
     host: str = "127.0.0.1",
     port: int = 8001,
@@ -654,6 +932,7 @@ async def serve_api(
     
     Args:
         comm: Communication instance for device interaction
+        sse_queue: Queue for publishing SSE events
         shutdown_event: Event to monitor for shutdown signal
         host: Server bind address
         port: Server port
@@ -662,7 +941,7 @@ async def serve_api(
     # Initialize application state
     app_state = ApplicationState(
         comm=comm,
-        sse_queue=asyncio.Queue(),
+        sse_queue=sse_queue,
         shutdown_event=shutdown_event,
     )
     
