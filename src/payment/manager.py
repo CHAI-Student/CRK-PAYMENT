@@ -119,13 +119,52 @@ class Communication:
     async def read_request(self):
         return await self.rx_request_queue.get()
 
-    async def fetch(self, message):
+    async def fetch(self, message, timeout: float | None = None):
+        """
+        Send a request and wait for response with timeout.
+        
+        Args:
+            message: Protocol message to send
+            timeout: Timeout in seconds (uses settings.comm_timeout if None)
+            
+        Returns:
+            Protocol response message
+            
+        Raises:
+            TimeoutError: If response not received within timeout
+            CommunicationError: If communication fails
+        """
+        from config import settings
+        from exceptions import TimeoutError as PaymentTimeoutError, CommunicationError
+        
+        if timeout is None:
+            timeout = settings.comm_timeout
+        
         async with self.lock:
             try:
+                # Discard any stale responses in the queue
                 while True:
                     self.rx_response_queue.get_nowait()
             except asyncio.QueueEmpty:
-                # Consume all existing responses; ignore them
                 pass
-            await self.tx_request_queue.put(message)
-            return await self.rx_response_queue.get()
+            
+            # Send request
+            try:
+                await self.tx_request_queue.put(message)
+            except Exception as e:
+                raise CommunicationError(
+                    f"Failed to send request: {e}",
+                ) from e
+            
+            # Wait for response with timeout
+            try:
+                response = await asyncio.wait_for(
+                    self.rx_response_queue.get(),
+                    timeout=timeout,
+                )
+                return response
+            except asyncio.TimeoutError as e:
+                raise PaymentTimeoutError(
+                    f"Device did not respond within {timeout} seconds",
+                    timeout=timeout,
+                ) from e

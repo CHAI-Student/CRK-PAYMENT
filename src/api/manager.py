@@ -1,17 +1,27 @@
-"""FastAPI application for payment gateway."""
+"""
+FastAPI application for payment gateway.
+
+This module provides the REST API for the payment gateway with:
+- Token payment approval/cancellation
+- Samsung Pay approval/cancellation
+- Device health checks
+- Real-time SSE event stream
+- RFC 7807 compliant error handling
+- Graceful shutdown support
+"""
 
 import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Optional
 
-from fastapi import (
-    FastAPI,
-    HTTPException,
-    Depends,
-)
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import ValidationError as PydanticValidationError
 from uvicorn.config import Config
 from uvicorn.server import Server
 
@@ -20,10 +30,18 @@ from api.schemas import (
     PaymentTokenApproveResponse,
     PaymentTokenCancelRequest,
     PaymentTokenCancelResponse,
+    ProblemDetail,
     SamsungPayApproveRequest,
     SamsungPayApproveResponse,
     SamsungPayCancelRequest,
     SamsungPayCancelResponse,
+)
+from exceptions import (
+    PaymentGatewayError,
+    ValidationError,
+    CommunicationError,
+    ProtocolError,
+    TimeoutError as PaymentTimeoutError,
 )
 from payment.const import AuthorizationType, StatusCode
 from payment.manager import Communication
@@ -37,21 +55,151 @@ from payment.command import (
 
 logger = logging.getLogger(__name__)
 
-# Global state
-_comm: Communication | None = None
-_sse_queue: asyncio.Queue | None = None
-_shutdown_event: asyncio.Event | None = None
+
+# ============================================================================
+# Application State
+# ============================================================================
 
 
-def get_communication() -> Communication:
-    """FastAPI dependency for communication."""
-    if _comm is None:
-        raise RuntimeError("Communication not initialized")
-    return _comm
+@dataclass
+class ApplicationState:
+    """
+    Application state container.
+    
+    Eliminates global mutable state by encapsulating all shared resources
+    in a single container passed via FastAPI's app.state.
+    """
+    comm: Communication
+    sse_queue: asyncio.Queue
+    shutdown_event: asyncio.Event
+
+
+def get_app_state(request: Request) -> ApplicationState:
+    """
+    FastAPI dependency to retrieve application state.
+    
+    Args:
+        request: FastAPI request object
+        
+    Returns:
+        Application state with communication, SSE queue, and shutdown event
+        
+    Raises:
+        RuntimeError: If application state not initialized
+    """
+    if not hasattr(request.app.state, 'app_state'):
+        raise RuntimeError("Application state not initialized")
+    return request.app.state.app_state
 
 
 # ============================================================================
-# FastAPI Application Setup
+# RFC 7807 Exception Handlers
+# ============================================================================
+
+
+async def payment_gateway_error_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """
+    Handle PaymentGatewayError exceptions with RFC 7807 Problem Details.
+    
+    Args:
+        request: FastAPI request object
+        exc: Payment gateway exception
+        
+    Returns:
+        RFC 7807 compliant JSON response
+    """
+    if not isinstance(exc, PaymentGatewayError):
+        return await generic_exception_handler(request, exc)
+
+    problem_detail = exc.to_problem_detail()
+    problem_detail["instance"] = str(request.url)
+    
+    logger.error(
+        f"Payment gateway error: {exc.type_urn} - {exc.detail}",
+        extra={"problem_detail": problem_detail}
+    )
+    
+    return JSONResponse(
+        status_code=exc.status,
+        content=problem_detail,
+        headers={"Content-Type": "application/problem+json"}
+    )
+
+
+async def validation_error_handler(
+    request: Request,
+    exc: Exception,
+) -> JSONResponse:
+    """
+    Handle request validation errors with RFC 7807 Problem Details.
+    
+    Args:
+        request: FastAPI request object
+        exc: Validation error from Pydantic
+        
+    Returns:
+        RFC 7807 compliant JSON response
+    """
+    if not isinstance(exc, RequestValidationError):
+        return await generic_exception_handler(request, exc)
+
+    validation_err = ValidationError(
+        "Request validation failed",
+        validation_errors=exc.errors(),
+    )
+    
+    problem_detail = validation_err.to_problem_detail()
+    problem_detail["instance"] = str(request.url)
+    
+    logger.warning(
+        f"Validation error: {exc.errors()}",
+        extra={"problem_detail": problem_detail}
+    )
+    
+    return JSONResponse(
+        status_code=validation_err.status,
+        content=problem_detail,
+        headers={"Content-Type": "application/problem+json"}
+    )
+
+
+async def generic_exception_handler(
+    request: Request,
+    exc: Exception
+) -> JSONResponse:
+    """
+    Handle unexpected exceptions with RFC 7807 Problem Details.
+    
+    Args:
+        request: FastAPI request object
+        exc: Unexpected exception
+        
+    Returns:
+        RFC 7807 compliant JSON response
+    """
+    logger.exception(f"Unexpected error: {exc}")
+    
+    problem_detail = {
+        "type": "urn:payment-gateway:error:internal",
+        "title": "Internal Server Error",
+        "status": 500,
+        "detail": "An unexpected error occurred",
+        "instance": str(request.url),
+        "timestamp": datetime.now().isoformat(),
+    }
+    
+    return JSONResponse(
+        status_code=500,
+        content=problem_detail,
+        headers={"Content-Type": "application/problem+json"}
+    )
+
+
+# ============================================================================
+# FastAPI Application
 # ============================================================================
 
 
@@ -60,19 +208,24 @@ async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager for startup/shutdown."""
     # Startup
     logger.info("Starting FastAPI application")
-    global _shutdown_event
-    _shutdown_event = asyncio.Event()
     
     yield
     
     # Shutdown
     logger.info("Shutting down FastAPI application")
-    if _shutdown_event:
-        _shutdown_event.set()
-    
 
-app = FastAPI(lifespan=lifespan)
-sse_queue = asyncio.Queue()
+
+app = FastAPI(
+    title="Payment Gateway API",
+    description="Enterprise payment gateway for CAT device integration",
+    version="2.0.0",
+    lifespan=lifespan,
+)
+
+# Register RFC 7807 exception handlers
+app.add_exception_handler(PaymentGatewayError, payment_gateway_error_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
 
 
 # ============================================================================
@@ -80,22 +233,27 @@ sse_queue = asyncio.Queue()
 # ============================================================================
 
 
-@app.get("/status", tags=["Status"])
-async def get_status(comm: Communication = Depends(get_communication)):
-    """Get device status check."""
-    try:
-        result = await send_device_check(comm)
-        return {
-            "status": "ok",
-            "response_code": result["response_code"].value,
-            "message": result["response_code"].name,
-        }
-    except Exception as e:
-        logger.error(f"Device check failed: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-        }
+@app.get(
+    "/status",
+    response_model=dict,
+    tags=["Status"],
+    summary="Device health check",
+    description="Check CAT device connectivity and readiness",
+)
+async def get_status(request: Request) -> dict:
+    """
+    Get device status check.
+    
+    Returns device status and response code indicating device health.
+    """
+    app_state = get_app_state(request)
+    
+    result = await send_device_check(app_state.comm)
+    return {
+        "status": "ok",
+        "response_code": result["response_code"].value,
+        "message": result["response_code"].name,
+    }
 
 
 # ============================================================================
@@ -106,73 +264,112 @@ async def get_status(comm: Communication = Depends(get_communication)):
 @app.post(
     "/payment/token/approve",
     response_model=PaymentTokenApproveResponse,
+    status_code=status.HTTP_200_OK,
     tags=["Token Payment"],
+    summary="Approve token payment",
+    description="Initiate a token-based payment transaction with the CAT device",
 )
-async def approve_payment_token(
-    request: PaymentTokenApproveRequest,
-    comm: Communication = Depends(get_communication),
+async def approve_token_payment(
+    request: Request,
+    data: PaymentTokenApproveRequest
 ) -> PaymentTokenApproveResponse:
     """
-    Approve a token payment.
+    Approve a token payment transaction.
     
-    Returns success after device approval.
+    Example:
+        POST /payment/token/approve
+        {
+            "amount": 10000,
+            "tax": 1000,
+            "service_fee": 0,
+            "approval_number": "12345678"
+        }
+    
+    Args:
+        request: FastAPI request object
+        data: Token approval request data
+        
+    Returns:
+        Token approval response with transaction details
+        
+    Raises:
+        ValidationError: Invalid request parameters
+        CommunicationError: Device communication failure
+        TimeoutError: Request timeout
     """
-    try:
-        response = await send_tx_token_approve(
-            comm,
-            amount=request.amount,
-            vankey_hash=request.vankey_hash,
-        )
-        
-        authorization_date = datetime.now().strftime("%y%m%d")
-        
-        return PaymentTokenApproveResponse(
-            status='Y' if response["status"] == StatusCode.Y else 'N',
-            authorization_number=response["authorization_number"],
-            authorization_date=authorization_date,
-            card_info=response["card_info"],
-            vankey=response["vankey"],
-            response_code=response["response_code"].value,
-            message=response["message"],
-        )
-    except Exception as e:
-        logger.error(f"Token approval failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    app_state = get_app_state(request)
+    
+    result = await send_tx_token_approve(
+        comm=app_state.comm,
+        amount=data.amount,
+        vankey_hash=data.vankey_hash,
+    )
+
+    return PaymentTokenApproveResponse(
+        status=result["status"].name,
+        authorization_number=result.get("authorization_number"),
+        authorization_date="",
+        card_info=result.get("card_info"),
+        vankey=result.get("vankey"),
+        response_code=result["response_code"].value,
+        message=result["message"],
+    )
 
 
 @app.post(
     "/payment/token/cancel",
     response_model=PaymentTokenCancelResponse,
+    status_code=status.HTTP_200_OK,
     tags=["Token Payment"],
+    summary="Cancel token payment",
+    description="Cancel a previously approved token payment transaction",
 )
-async def cancel_payment_token(
-    request: PaymentTokenCancelRequest,
-    comm: Communication = Depends(get_communication),
+async def cancel_token_payment(
+    request: Request,
+    data: PaymentTokenCancelRequest
 ) -> PaymentTokenCancelResponse:
     """
-    Cancel a token payment.
+    Cancel a token payment transaction.
     
-    Returns success after device cancellation.
-    """
-    try:
-        response = await send_tx_token_cancel(
-            comm,
-            amount=request.amount,
-            original_authorization_number=request.original_authorization_number,
-            original_authorization_date=request.original_authorization_date,
-            vankey_hash=request.vankey_hash,
-        )
+    Example:
+        POST /payment/token/cancel
+        {
+            "amount": 10000,
+            "tax": 1000,
+            "service_fee": 0,
+            "authorization_number": "12345678",
+            "authorization_date": "0101"
+        }
+    
+    Args:
+        request: FastAPI request object
+        data: Token cancellation request data
         
-        return PaymentTokenCancelResponse(
-            status='Y' if response["status"] == StatusCode.Y else 'N',
-            card_info=response["card_info"],
-            vankey=response["vankey"],
-            response_code=response["response_code"].value,
-            message=response["message"],
-        )
-    except Exception as e:
-        logger.error(f"Token cancellation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    Returns:
+        Token cancellation response
+        
+    Raises:
+        ValidationError: Invalid request parameters
+        CommunicationError: Device communication failure
+        TimeoutError: Request timeout
+    """
+    app_state = get_app_state(request)
+    
+    result = await send_tx_token_cancel(
+        comm=app_state.comm,
+        amount=data.amount,
+        original_authorization_number=data.original_authorization_number,
+        original_authorization_date=data.original_authorization_date,
+        vankey_hash=data.vankey_hash,
+    )
+
+    return PaymentTokenCancelResponse(
+        status=result["status"].name,
+        card_info=result.get("card_info"),
+        vankey=result.get("vankey"),
+        response_code=result["response_code"].value,
+        message=result["message"],
+    )
 
 
 # ============================================================================
@@ -181,110 +378,263 @@ async def cancel_payment_token(
 
 
 @app.post(
-    "/payment/samsung/approve",
+    "/payment/samsung-pay/approve",
     response_model=SamsungPayApproveResponse,
+    status_code=status.HTTP_200_OK,
     tags=["Samsung Pay"],
+    summary="Approve Samsung Pay payment",
+    description="Initiate a Samsung Pay transaction with the CAT device",
 )
-async def approve_samsung_payment(
-    request: SamsungPayApproveRequest,
-    comm: Communication = Depends(get_communication),
+async def approve_samsung_pay(
+    request: Request,
+    data: SamsungPayApproveRequest
 ) -> SamsungPayApproveResponse:
     """
-    Approve a Samsung Pay payment.
+    Approve a Samsung Pay transaction.
     
-    Returns success immediately; persistence is handled asynchronously.
+    Example:
+        POST /payment/samsung-pay/approve
+        {
+            "amount": 10000,
+            "tax": 1000,
+            "service_fee": 0,
+            "installment": 0
+        }
+    
+    Args:
+        request: FastAPI request object
+        data: Samsung Pay approval request data
+        
+    Returns:
+        Samsung Pay approval response with transaction details
+        
+    Raises:
+        ValidationError: Invalid request parameters
+        CommunicationError: Device communication failure
+        TimeoutError: Request timeout
     """
-    try:
-        # Map authorization_type to protocol value
-        auth_type_map = {"PRE_AUTH": 0x00, "PURCHASE": 0x01}
-        auth_type_byte = auth_type_map.get(request.authorization_type, 0x01)
-        
-        # Encode display message to EUC-KR if needed
-        display_msg = request.display_message or "삼성페이 결제"
-        
-        response = await send_tx_spay_approve(
-            comm,
-            amount=request.amount,
-            authorization_type=AuthorizationType(auth_type_byte),
-            display_message=display_msg,
-        )
-        
-        authorization_date = datetime.now().strftime("%y%m%d")
-        
-        return SamsungPayApproveResponse(
-            status='Y' if response["status"] == StatusCode.Y else 'N',
-            authorization_number=response["authorization_number"],
-            authorization_date=authorization_date,
-            card_info=response["card_info"],
-            vankey=response["vankey"],
-            response_code=response["response_code"].value,
-            message=response["message"],
-        )
-    except Exception as e:
-        logger.error(f"Samsung Pay approval failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    app_state = get_app_state(request)
+    
+    result = await send_tx_spay_approve(
+        comm=app_state.comm,
+        amount=data.amount,
+        authorization_type=AuthorizationType[data.authorization_type],
+        display_message=data.display_message or "",
+    )
+
+    return SamsungPayApproveResponse(
+        status=result["status"].name,
+        authorization_number=result.get("authorization_number"),
+        authorization_date="",
+        card_info=result.get("card_info"),
+        vankey=result.get("vankey"),
+        response_code=result["response_code"].value,
+        message=result["message"],
+    )
 
 
 @app.post(
-    "/payment/samsung/cancel",
+    "/payment/samsung-pay/cancel",
     response_model=SamsungPayCancelResponse,
+    status_code=status.HTTP_200_OK,
     tags=["Samsung Pay"],
+    summary="Cancel Samsung Pay payment",
+    description="Cancel a previously approved Samsung Pay transaction",
 )
-async def cancel_samsung_payment(
-    request: SamsungPayCancelRequest,
-    comm: Communication = Depends(get_communication),
+async def cancel_samsung_pay(
+    request: Request,
+    data: SamsungPayCancelRequest
 ) -> SamsungPayCancelResponse:
     """
-    Cancel a Samsung Pay payment.
+    Cancel a Samsung Pay transaction.
     
-    Returns success immediately; persistence is handled asynchronously.
-    """
-    try:
-        response = await send_tx_spay_cancel(
-            comm,
-            amount=request.amount,
-            original_authorization_number=request.original_authorization_number,
-            original_authorization_date=request.original_authorization_date,
-            vankey=request.vankey,
-        )
+    Example:
+        POST /payment/samsung-pay/cancel
+        {
+            "amount": 10000,
+            "tax": 1000,
+            "service_fee": 0,
+            "authorization_number": "12345678",
+            "authorization_date": "0101"
+        }
+    
+    Args:
+        request: FastAPI request object
+        data: Samsung Pay cancellation request data
         
-        # Queue persistence as background task
-        return SamsungPayCancelResponse(
-            status='Y' if response["status"] == StatusCode.Y else 'N',
-            card_info=response["card_info"],
-            vankey=response["vankey"],
-            response_code=response["response_code"].value,
-            message=response["message"],
-        )
-    except Exception as e:
-        logger.error(f"Samsung Pay cancellation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    Returns:
+        Samsung Pay cancellation response
+        
+    Raises:
+        ValidationError: Invalid request parameters
+        CommunicationError: Device communication failure
+        TimeoutError: Request timeout
+    """
+    app_state = get_app_state(request)
+    
+    result = await send_tx_spay_cancel(
+        comm=app_state.comm,
+        amount=data.amount,
+        original_authorization_number=data.original_authorization_number,
+        original_authorization_date=data.original_authorization_date,
+        vankey=data.vankey,
+    )
+
+    return SamsungPayCancelResponse(
+        status=result["status"].name,
+        card_info=result.get("card_info"),
+        vankey=result.get("vankey"),
+        response_code=result["response_code"].value,
+        message=result["message"],
+    )
 
 
 # ============================================================================
-# SSE Endpoint
+# SSE Event Stream
 # ============================================================================
 
 
-@app.get("/sse", tags=["Streaming"])
-async def sse_endpoint():
+@app.get(
+    "/events",
+    tags=["Events"],
+    summary="SSE event stream",
+    description="Server-Sent Events stream for device-initiated events",
+    responses={
+        200: {
+            "description": "text/event-stream with JSON payloads",
+            "content": {
+                "text/event-stream": {
+                    "examples": {
+                        "tx_token_generate": {
+                            "summary": "Token generated successfully",
+                            "value": "event: tx_token_generate\ndata: {\"status\": \"Y\", \"vankey_hash\": \"VANKEY1234567890HASH1234\", \"card_info\": {\"SERIAL_NUMBER\": \"123\", \"ACQUIRER_ID\": \"001\", \"ACQUIRER_NAME\": \"ACQ\", \"ISSUER_ID\": \"002\", \"ISSUER_NAME\": \"ISS\", \"MERCHANT_ID\": \"MERCH\"}, \"response_code\": 0, \"message\": \"Approved\"}\n\n"
+                        },
+                        "tx_token_generate_error": {
+                            "summary": "Token generation failed",
+                            "value": "event: tx_token_generate_error\ndata: {\"error\": \"Token generation failed\"}\n\n"
+                        },
+                        "samsung_pay_init": {
+                            "summary": "Samsung Pay initialization",
+                            "value": "event: samsung_pay_init\ndata: {}\n\n"
+                        },
+                        "rfid_init": {
+                            "summary": "RFID detected",
+                            "value": "event: rfid_init\ndata: {\"data\": \"1234567890\"}\n\n"
+                        },
+                    }
+                }
+            },
+        }
+    },
+)
+async def event_stream(request: Request) -> StreamingResponse:
     """
-    Server-sent events stream for real-time payment notifications.
+    SSE endpoint for device-initiated events.
+    
+    Returns a stream of Server-Sent Events for:
+    - Token initialization events
+    - Samsung Pay initialization events
+    - RFID card detection events
+    
+    Example events (SSE wire format):
+        event: tx_token_generate
+        data: {"status": "Y", "vankey_hash": "VANKEY1234567890HASH1234", "card_info": {"SERIAL_NUMBER": "123", "ACQUIRER_ID": "001", "ACQUIRER_NAME": "ACQ", "ISSUER_ID": "002", "ISSUER_NAME": "ISS", "MERCHANT_ID": "MERCH"}, "response_code": 0, "message": "Approved"}
+        
+        event: tx_token_generate_error
+        data: {"error": "Token generation failed"}
+        
+        event: samsung_pay_init
+        data: {}
+        
+        event: rfid_init
+        data: {"data": "1234567890"}
+    
+    Args:
+        request: FastAPI request object
+        
+    Returns:
+        SSE stream response
     """
+    app_state = get_app_state(request)
+    
     async def event_generator():
-        while not (_shutdown_event and _shutdown_event.is_set()):
-            try:
-                # Wait for event or shutdown signal
-                event = await asyncio.wait_for(sse_queue.get(), timeout=5.0)
-                yield f"event: {event['event']}\ndata: {json.dumps(event['data'])}\n\n"
-            except asyncio.TimeoutError:
-                # Keep connection alive with comment
-                yield ": keepalive\n\n"
-            except Exception as e:
-                logger.error(f"SSE error: {e}")
-                break
+        try:
+            while not app_state.shutdown_event.is_set():
+                # Wait for event with timeout to allow shutdown checking
+                try:
+                    event = await asyncio.wait_for(
+                        app_state.sse_queue.get(),
+                        timeout=1.0
+                    )
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    # Check if client disconnected
+                    if await request.is_disconnected():
+                        break
+                    continue
+        except asyncio.CancelledError:
+            logger.info("SSE stream cancelled")
+        finally:
+            logger.info("SSE stream closed")
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+# ============================================================================
+# Graceful Server
+# ============================================================================
+
+
+class GracefulServer(Server):
+    """
+    Uvicorn server with external shutdown event support.
+    
+    Extends Uvicorn's Server to monitor an external asyncio.Event for
+    graceful shutdown coordination across multiple services.
+    """
+    
+    def __init__(self, config: Config, shutdown_event: asyncio.Event):
+        """
+        Initialize graceful server.
+        
+        Args:
+            config: Uvicorn server configuration
+            shutdown_event: External shutdown event to monitor
+        """
+        super().__init__(config)
+        self._external_shutdown = shutdown_event
+        self.force_exit = False  # Graceful shutdown, wait for requests
+    
+    async def serve(self, sockets=None):
+        """
+        Override serve to monitor external shutdown event.
+        
+        Args:
+            sockets: Optional pre-bound sockets
+        """
+        # Start shutdown monitor task
+        monitor_task = asyncio.create_task(self._monitor_shutdown())
+        try:
+            await super().serve(sockets)
+        finally:
+            monitor_task.cancel()
+            try:
+                await monitor_task
+            except asyncio.CancelledError:
+                pass
+    
+    async def _monitor_shutdown(self):
+        """Monitor external shutdown event and trigger server shutdown."""
+        await self._external_shutdown.wait()
+        logger.info("External shutdown signal received, stopping API server")
+        self.should_exit = True
 
 
 # ============================================================================
@@ -294,25 +644,34 @@ async def sse_endpoint():
 
 async def serve_api(
     comm: Communication,
+    shutdown_event: asyncio.Event,
     host: str = "127.0.0.1",
     port: int = 8001,
     log_level: str = "info",
 ):
     """
-    Start the FastAPI server.
+    Start the FastAPI server with graceful shutdown support.
     
     Args:
         comm: Communication instance for device interaction
-        host: Server host
+        shutdown_event: Event to monitor for shutdown signal
+        host: Server bind address
         port: Server port
         log_level: Uvicorn log level
     """
-    global _comm, _sse_queue
+    # Initialize application state
+    app_state = ApplicationState(
+        comm=comm,
+        sse_queue=asyncio.Queue(),
+        shutdown_event=shutdown_event,
+    )
     
-    _comm = comm
-    _sse_queue = sse_queue
+    # Store in app.state for dependency injection
+    app.state.app_state = app_state
     
+    # Create graceful server
     config = Config(app=app, host=host, port=port, log_level=log_level)
-    server = Server(config=config)
-    server.force_exit = True
+    server = GracefulServer(config=config, shutdown_event=shutdown_event)
+    
+    logger.info(f"Starting API server on {host}:{port}")
     await server.serve()
