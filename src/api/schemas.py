@@ -460,9 +460,9 @@ class SamsungPayCancelRequest(BaseModel):
     vankey: str = Field(
         ...,
         description="VAN key from original approval (24 characters)",
-        min_length=24,
-        max_length=24,
-        examples=["VANKEY1234567890ABCDEFGH"],
+        min_length=16,
+        max_length=16,
+        examples=["VANKEY1234567890"],
     )
     
     @field_validator("amount")

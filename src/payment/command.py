@@ -79,9 +79,9 @@ def _validate_amount(amount: str, field_name: str = "amount") -> None:
             field=field_name,
         )
     
-    if len(amount) != 9:
+    if len(amount) < 1 or len(amount) > 9:
         raise ValidationError(
-            f"{field_name} must be exactly 9 digits, got {len(amount)}",
+            f"{field_name} must be between 1 and 9 digits, got {len(amount)}",
             field=field_name,
             value=amount,
         )
