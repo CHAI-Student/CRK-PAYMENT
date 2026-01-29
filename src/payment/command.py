@@ -494,7 +494,7 @@ async def send_tx_spay_approve(
         extra={
             "status": response_payload.status,
             "auth_number": response_payload.authorization_number,
-            "vankey_len": len(response_payload.vankey) if response_payload.vankey else 0,
+            "vankey": response_payload.vankey,
             "response_code": response_payload.response_code.name,
         },
     )
