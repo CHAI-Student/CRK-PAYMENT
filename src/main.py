@@ -20,7 +20,7 @@ from typing import Optional, Set
 from action.manager import Action
 from api.manager import serve_api
 from config import settings
-from payment import Communication
+from payment.manager import Communication
 
 # Configure logging from settings
 settings.configure_logging()

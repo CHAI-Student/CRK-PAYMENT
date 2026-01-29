@@ -16,12 +16,10 @@ import logging
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import ValidationError as PydanticValidationError
 from uvicorn.config import Config
 from uvicorn.server import Server
 
@@ -30,7 +28,6 @@ from api.schemas import (
     PaymentTokenApproveResponse,
     PaymentTokenCancelRequest,
     PaymentTokenCancelResponse,
-    ProblemDetail,
     SamsungPayApproveRequest,
     SamsungPayApproveResponse,
     SamsungPayCancelRequest,
@@ -39,11 +36,8 @@ from api.schemas import (
 from exceptions import (
     PaymentGatewayError,
     ValidationError,
-    CommunicationError,
-    ProtocolError,
-    TimeoutError as PaymentTimeoutError,
 )
-from payment.const import AuthorizationType, StatusCode
+from payment.const import AuthorizationType
 from payment.manager import Communication
 from payment.command import (
     send_device_check,

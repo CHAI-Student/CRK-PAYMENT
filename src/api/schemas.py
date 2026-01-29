@@ -11,7 +11,7 @@ All models include:
 - Type hints for IDE support
 """
 
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -310,7 +310,7 @@ class SamsungPayApproveRequest(BaseModel):
     
     Example:
         {
-            "amount": "000005000",
+            "amount": "1000",
             "authorization_type": "PURCHASE",
             "display_message": "삼성페이 결제"
         }
@@ -318,7 +318,7 @@ class SamsungPayApproveRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "amount": "000005000",
+                "amount": "1000",
                 "authorization_type": "PURCHASE",
                 "display_message": "삼성페이 결제"
             }
@@ -327,11 +327,11 @@ class SamsungPayApproveRequest(BaseModel):
     
     amount: str = Field(
         ...,
-        description="Transaction amount as numeric string (1 to 9 digits, e.g., '5000' for ₩5,000)",
+        description="Transaction amount as numeric string (1 to 9 digits, e.g., '1000' for ₩1,000)",
         pattern=r"^\d{1,9}$",
         min_length=1,
         max_length=9,
-        examples=["5000", "10000"],
+        examples=["1000", "5000", "10000"],
     )
     authorization_type: str = Field(
         ...,
@@ -352,6 +352,13 @@ class SamsungPayApproveRequest(BaseModel):
         """Validate amount contains only digits."""
         if not v.isdigit():
             raise ValueError("Amount must contain only digits 0-9")
+        return v
+    
+    @field_validator("display_message")
+    @classmethod
+    def validate_display_message_length(cls, v: Optional[str]) -> Optional[str]:
+        if not v is None and len(v.encode("euc-kr")) > 20:
+            raise ValueError("Display message exceeds 20 bytes in EUC-KR encoding")
         return v
 
 

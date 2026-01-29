@@ -15,13 +15,11 @@ Timeout behavior:
 - Can be overridden per-command if needed
 """
 
-import asyncio
 import logging
 
 from construct import ConstructError
 
-from config import settings
-from exceptions import ProtocolError, TimeoutError, ValidationError
+from exceptions import ProtocolError, ValidationError
 
 from .payment_types import (
     DeviceCheckData,
