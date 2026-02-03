@@ -397,7 +397,7 @@ async def approve_token_payment(
     return PaymentTokenApproveResponse(
         status=result["status"].name,
         authorization_number=result.get("authorization_number"),
-        authorization_date="",
+        authorization_date=datetime.now().strftime("%y%m%d"),
         card_info=result.get("card_info"),
         vankey=result.get("vankey"),
         response_code=result["response_code"].value,
@@ -634,7 +634,7 @@ async def approve_samsung_pay(
     return SamsungPayApproveResponse(
         status=result["status"].name,
         authorization_number=result.get("authorization_number"),
-        authorization_date="",
+        authorization_date=datetime.now().strftime("%y%m%d"),
         card_info=result.get("card_info"),
         vankey=result.get("vankey"),
         response_code=result["response_code"].value,
