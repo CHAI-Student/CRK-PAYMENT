@@ -1,5 +1,4 @@
 construct
-fastapi
+fastapi[standard]
 pydantic
 uvicorn
-aiosqlite

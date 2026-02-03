@@ -146,7 +146,6 @@ class Settings:
         
         # Reduce verbosity of third-party libraries
         logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-        logging.getLogger("aiosqlite").setLevel(logging.WARNING)
 
 
 # Global settings instance - load once at module import
