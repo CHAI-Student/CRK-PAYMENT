@@ -2,6 +2,11 @@ from typing import TypedDict, Optional
 
 from .const import CardInfoData, StatusCode, ResponseCode
 
+class ItemData(TypedDict):
+    name: str
+    quantity: int
+    total_price: int
+
 class TxTokenData(TypedDict):
     status: StatusCode
     vankey_hash: Optional[str]

@@ -1,4 +1,5 @@
 from construct import (
+    Bytes,
     Const,
     GreedyBytes,
     GreedyString,
@@ -37,6 +38,12 @@ CardInfo = Struct(
     "issuer_name" / NullTerminated(GreedyString("euc-kr"), term=RS),
     # Const(RS),
     "merchant_id" / GreedyString("ascii"),
+)
+
+ItemInfo = Struct(
+    "name" / Bytes(10),
+    "quantity" / Bytes(2),
+    "total_price" / Bytes(6),
 )
 
 AgeCheckRequest = Struct(
@@ -81,7 +88,7 @@ TransactionTokenApproveRequest = Struct(
     # Const(FS),
     "vankey_hash" / NullTerminated(GreedyString("ascii"), term=FS),
     # Const(FS),
-    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    "message" / NullTerminated(GreedyBytes, term=FS),
     # Const(FS),
 )
 TransactionTokenApproveResponse = Struct(
@@ -141,7 +148,7 @@ TransactionSPayApproveRequest = Struct(
     # Const(FS),
     "authorization_type" / Construct_AuthorizationType,
     Const(FS),
-    "message" / NullTerminated(GreedyString("euc-kr"), term=FS),
+    "message" / NullTerminated(GreedyBytes, term=FS),
     # Const(FS),
 )
 TransactionSPayApproveResponse = Struct(

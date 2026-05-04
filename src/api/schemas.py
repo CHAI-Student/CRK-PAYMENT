@@ -79,6 +79,41 @@ class ProblemDetail(BaseModel):
         examples=["/api/v1/payment/token/approve"],
     )
 
+# ============================================================================
+# Common Models
+# ============================================================================
+
+
+class Item(BaseModel):
+    """Item information for payment transactions."""
+    name: str = Field(..., description="Item name", examples=["최대5글자", "상품명01"], max_length=5)
+    quantity: int = Field(..., description="Item quantity", ge=1, examples=[1, 2], le=99)
+    total_price: int = Field(..., description="Total price in KRW", ge=0, examples=[1000, 2000], le=999999)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name_length(cls, v: str) -> str:
+        """Validate name does not exceed 5 characters."""
+        if len(v) > 5:
+            raise ValueError("Name must be at most 5 characters")
+        return v
+    
+    @ field_validator("quantity")
+    @classmethod
+    def validate_quantity(cls, v: int) -> int:
+        """Validate quantity is between 1 and 99."""
+        if v < 1 or v > 99:
+            raise ValueError("Quantity must be between 1 and 99")
+        return v
+    
+    @field_validator("total_price")
+    @classmethod
+    def validate_total_price(cls, v: int) -> int:
+        """Validate total price is between 0 and 999,999."""
+        if v < 0 or v > 999999:
+            raise ValueError("Total price must be between 0 and 999,999")
+        return v
+
 
 # ============================================================================
 # Token Payment Models
@@ -101,8 +136,20 @@ class PaymentTokenApproveRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "amount": "1000",
-                "vankey_hash": "VANKEY1234567890HASH1234"
+                "amount": "5000",
+                "vankey_hash": "VANKEY1234567890HASH1234",
+                "items": [
+                    {
+                        "name": "상품A",
+                        "quantity": 1,
+                        "total_price": 1000
+                    },
+                    {
+                        "name": "상품B",
+                        "quantity": 2,
+                        "total_price": 4000
+                    }
+                ]
             }
         }
     )
@@ -121,6 +168,25 @@ class PaymentTokenApproveRequest(BaseModel):
         min_length=24,
         max_length=24,
         examples=["VANKEY1234567890HASH1234"],
+    )
+    items: Optional[list[Item]] = Field(
+        ...,
+        description="Optional list of items included in the transaction",
+        examples=[
+            [
+                {
+                    "name": "상품A",
+                    "quantity": 1,
+                    "total_price": 1000
+                },
+                {
+                    "name": "상품B",
+                    "quantity": 2,
+                    "total_price": 4000
+                }
+            ]
+        ],
+        max_length=5,
     )
     
     @field_validator("amount")
@@ -318,9 +384,20 @@ class SamsungPayApproveRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "amount": "1000",
+                "amount": "5000",
                 "authorization_type": "PURCHASE",
-                "display_message": "삼성페이 결제"
+                "items": [
+                    {
+                        "name": "상품A",
+                        "quantity": 1,
+                        "total_price": 1000
+                    },
+                    {
+                        "name": "상품B",
+                        "quantity": 2,
+                        "total_price": 4000
+                    }
+                ],
             }
         }
     )
@@ -339,11 +416,24 @@ class SamsungPayApproveRequest(BaseModel):
         pattern=r"^(PRE_AUTH|PURCHASE)$",
         examples=["PURCHASE", "PRE_AUTH"],
     )
-    display_message: Optional[str] = Field(
-        default="삼성페이 결제",
-        description="Display message shown on device screen (EUC-KR encoding, max 20 bytes)",
-        max_length=20,
-        examples=["삼성페이 결제", "Samsung Pay"],
+    items: Optional[list[Item]] = Field(
+        ...,
+        description="Optional list of items included in the transaction",
+        examples=[
+            [
+                {
+                    "name": "상품A",
+                    "quantity": 1,
+                    "total_price": 1000
+                },
+                {
+                    "name": "상품B",
+                    "quantity": 2,
+                    "total_price": 4000
+                }
+            ]
+        ],
+        max_length=5,
     )
     
     @field_validator("amount")
@@ -352,13 +442,6 @@ class SamsungPayApproveRequest(BaseModel):
         """Validate amount contains only digits."""
         if not v.isdigit():
             raise ValueError("Amount must contain only digits 0-9")
-        return v
-    
-    @field_validator("display_message")
-    @classmethod
-    def validate_display_message_length(cls, v: Optional[str]) -> Optional[str]:
-        if not v is None and len(v.encode("euc-kr")) > 20:
-            raise ValueError("Display message exceeds 20 bytes in EUC-KR encoding")
         return v
 
 

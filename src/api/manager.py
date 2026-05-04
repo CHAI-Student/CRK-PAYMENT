@@ -46,6 +46,7 @@ from payment.command import (
     send_tx_token_approve,
     send_tx_token_cancel,
 )
+from payment.payment_types import ItemData
 
 logger = logging.getLogger(__name__)
 
@@ -388,10 +389,20 @@ async def approve_token_payment(
     """
     app_state = get_app_state(request)
     
+    items = []
+    if data.items:
+        for item in data.items:
+            items.append(ItemData(
+                name=item.name,
+                quantity=item.quantity,
+                total_price=item.total_price,
+            ))
+
     result = await send_tx_token_approve(
         comm=app_state.comm,
         amount=data.amount,
         vankey_hash=data.vankey_hash,
+        items=items,
     )
 
     return PaymentTokenApproveResponse(
@@ -623,12 +634,21 @@ async def approve_samsung_pay(
         TimeoutError: Request timeout
     """
     app_state = get_app_state(request)
-    
+
+    items = []
+    if data.items:
+        for item in data.items:
+            items.append(ItemData(
+                name=item.name,
+                quantity=item.quantity,
+                total_price=item.total_price,
+            ))
+
     result = await send_tx_spay_approve(
         comm=app_state.comm,
         amount=data.amount,
         authorization_type=AuthorizationType[data.authorization_type],
-        display_message=data.display_message or "",
+        items=items,
     )
 
     return SamsungPayApproveResponse(

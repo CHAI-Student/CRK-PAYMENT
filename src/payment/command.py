@@ -38,6 +38,7 @@ from .const import (
 )
 from .manager import Communication
 from .payload import (
+    ItemInfo,
     DeviceCheckRequest,
     DeviceCheckResponse,
     ErrorPayload,
@@ -272,6 +273,7 @@ async def send_tx_token_approve(
     comm: Communication,
     amount: str,
     vankey_hash: str,
+    items: list[dict],
     timeout: float | None = None,
 ) -> TxTokenApprovalData:
     """
@@ -281,6 +283,7 @@ async def send_tx_token_approve(
         comm: Communication instance
         amount: Transaction amount (9-digit numeric string)
         vankey_hash: VAN key hash (24 characters)
+        items: List of items in the transaction
         timeout: Response timeout in seconds (uses config default if None)
         
     Returns:
@@ -298,12 +301,24 @@ async def send_tx_token_approve(
         "Sending TX_TOKEN_APPROVE request",
         extra={"amount": amount, "vankey_hash_len": len(vankey_hash)},
     )
+
+    message = b''
+
+    for item in items:
+        name = str(item.get("name", "")).encode("euc-kr", errors="ignore")[:10].ljust(10, b'\x00')
+        quantity = str(item.get("quantity", 0)).encode("ascii", errors="ignore")[:2].ljust(2, b'\x00')
+        total_price = str(item.get("total_price", "")).encode("ascii", errors="ignore")[:6].ljust(6, b'\x00')
+        message += ItemInfo.build({
+            "name": name,
+            "quantity": quantity,
+            "total_price": total_price,
+        })
     
     request_payload = TransactionTokenApproveRequest.build(
         {
             "amount": amount,
             "vankey_hash": vankey_hash,
-            "message": "",
+            "message": message,
         }
     )
     request = Protocol.build(
@@ -431,7 +446,7 @@ async def send_tx_spay_approve(
     comm: Communication,
     amount: str,
     authorization_type: AuthorizationType,
-    display_message: str = "",
+    items: list[dict],
     timeout: float | None = None,
 ) -> TxSPayApprovalData:
     """
@@ -441,7 +456,7 @@ async def send_tx_spay_approve(
         comm: Communication instance
         amount: Transaction amount (9-digit numeric string)
         authorization_type: Authorization type (PRE_AUTH or PURCHASE)
-        display_message: Message to display on device screen
+        items: List of items in the transaction
         timeout: Response timeout in seconds (uses config default if None)
         
     Returns:
@@ -460,15 +475,26 @@ async def send_tx_spay_approve(
         extra={
             "amount": amount,
             "auth_type": authorization_type.value,
-            "display_msg": display_message,
         },
     )
+
+    message = b''
+
+    for item in items:
+        name = str(item.get("name", "")).encode("euc-kr", errors="ignore")[:10].ljust(10, b'\x00')
+        quantity = str(item.get("quantity", 0)).encode("ascii", errors="ignore")[:2].ljust(2, b'\x00')
+        total_price = str(item.get("total_price", "")).encode("ascii", errors="ignore")[:6].ljust(6, b'\x00')
+        message += ItemInfo.build({
+            "name": name,
+            "quantity": quantity,
+            "total_price": total_price,
+        })
     
     request_payload = TransactionSPayApproveRequest.build(
         {
             "amount": amount,
             "authorization_type": authorization_type,
-            "message": display_message,
+            "message": message,
         }
     )
     request = Protocol.build(
