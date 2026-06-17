@@ -37,7 +37,9 @@ CardInfo = Struct(
     # Const(RS),
     "issuer_name" / NullTerminated(GreedyString("euc-kr"), term=RS),
     # Const(RS),
-    "merchant_id" / GreedyString("ascii"),
+    "merchant_id" / NullTerminated(GreedyString("ascii"), term=RS),
+    # Const(RS),
+    "date_time" / GreedyString("ascii"),
 )
 
 ItemInfo = Struct(

@@ -405,11 +405,17 @@ async def approve_token_payment(
         items=items,
     )
 
+    card_info = result.get("card_info")
+    if card_info:
+        date_time = card_info.get("date_time")
+    else:
+        date_time = None
+
     return PaymentTokenApproveResponse(
         status=result["status"].name,
         authorization_number=result.get("authorization_number"),
-        authorization_date=datetime.now().strftime("%y%m%d"),
-        card_info=result.get("card_info"),
+        authorization_date=date_time,
+        card_info=card_info,
         vankey=result.get("vankey"),
         response_code=result["response_code"].value,
         message=result["message"],
@@ -651,11 +657,17 @@ async def approve_samsung_pay(
         items=items,
     )
 
+    card_info = result.get("card_info")
+    if card_info:
+        date_time = card_info.get("date_time")
+    else:
+        date_time = None
+
     return SamsungPayApproveResponse(
         status=result["status"].name,
         authorization_number=result.get("authorization_number"),
-        authorization_date=datetime.now().strftime("%y%m%d"),
-        card_info=result.get("card_info"),
+        authorization_date=date_time,
+        card_info=card_info,
         vankey=result.get("vankey"),
         response_code=result["response_code"].value,
         message=result["message"],

@@ -52,6 +52,7 @@ class CardInfoData(TypedDict):
     ISSUER_ID: str
     ISSUER_NAME: str
     MERCHANT_ID: str
+    DATE_TIME: str
 
 def build_card_info_data(card_info) -> Optional[CardInfoData]:
     if card_info is None:
@@ -65,6 +66,7 @@ def build_card_info_data(card_info) -> Optional[CardInfoData]:
         ISSUER_ID=card_info.issuer_id,
         ISSUER_NAME=card_info.issuer_name,
         MERCHANT_ID=card_info.merchant_id,
+        DATE_TIME=card_info.date_time,
     )
 
 STX = b"\x02"
