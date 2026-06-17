@@ -42,6 +42,7 @@ class ResponseCode(int, PyEnum):
     ERROR_VAN           = 0xB6
     ERROR_POS           = 0xC0
     NETWORK_ERROR       = 0xC1
+    NOCHK_NETWORK       = 0xC2
     ERROR               = 0xFF
 
 class CardInfoData(TypedDict):
