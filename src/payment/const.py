@@ -96,6 +96,7 @@ Construct_ResponseCode = Mapping(
         ResponseCode.ERROR_VAN: ResponseCode.ERROR_VAN.value,
         ResponseCode.ERROR_POS: ResponseCode.ERROR_POS.value,
         ResponseCode.NETWORK_ERROR: ResponseCode.NETWORK_ERROR.value,
+        ResponseCode.NOCHK_NETWORK: ResponseCode.NOCHK_NETWORK.value,
         ResponseCode.ERROR: ResponseCode.ERROR.value,
     }
 )
