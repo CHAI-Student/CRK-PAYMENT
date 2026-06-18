@@ -407,7 +407,7 @@ async def approve_token_payment(
 
     card_info = result.get("card_info")
     if card_info:
-        date_time = card_info.get("date_time")
+        date_time = card_info.get("DATE_TIME")
     else:
         date_time = None
 
@@ -659,7 +659,7 @@ async def approve_samsung_pay(
 
     card_info = result.get("card_info")
     if card_info:
-        date_time = card_info.get("date_time")
+        date_time = card_info.get("DATE_TIME")
     else:
         date_time = None
 
