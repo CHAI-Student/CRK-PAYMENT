@@ -33,6 +33,7 @@ from .payment_types import (
 from .const import (
     AuthorizationType,
     MessageType,
+    ResponseCode,
     ServiceCode,
     build_card_info_data,
 )
@@ -659,17 +660,43 @@ async def send_device_check(
     
     try:
         response_payload = DeviceCheckResponse.parse(response.payload)
-    except ConstructError as e:
-        raise ProtocolError(
-            response.payload.decode('euc-kr', errors='ignore')
-        ) from e  
+        logger.info(
+            "Device check complete",
+            extra={"response_code": response_payload.response_code.name},
+        )
+        return DeviceCheckData(
+            response_code=response_payload.response_code,
+        )
+    except ConstructError:
+        pass
+
+    try:
+        error_payload = ErrorPayload.parse(response.payload)
+        logger.info(
+            "Device check error",
+            extra={
+                "response_code": error_payload.response_code.name,
+                "message": error_payload.message,
+            },
+        )
+        return DeviceCheckData(
+            response_code=error_payload.response_code,
+        )
+    except ConstructError:
+        pass
+        # raise ProtocolError(
+        #     response.payload.decode('euc-kr', errors='ignore')
+        # ) from e  
         
-    
+    response_payload = DeviceCheckResponse.parse(
+        DeviceCheckResponse.build({
+            "response_code": ResponseCode.SERVICE_UNAVAILABLE,
+        })
+    )
     logger.info(
         "Device check complete",
         extra={"response_code": response_payload.response_code.name},
     )
-    
     return DeviceCheckData(
         response_code=response_payload.response_code,
     )
