@@ -76,7 +76,7 @@ Node 애플리케이션이 접근하는 API 서버와 카드 단말기가 접속
 
 | 환경변수 | 기본값 | 설명 |
 | --- | --- | --- |
-| `COMM_TIMEOUT` | `30.0` | 단말기 응답 대기 시간(초) |
+| `COMM_TIMEOUT` | `120.0` | 단말기 응답 대기 시간(초) |
 | `SHUTDOWN_TIMEOUT` | `10.0` | graceful shutdown 시 작업 종료 대기 시간(초) |
 | `API_HOST` | `127.0.0.1` | HTTP API 서버 바인드 주소 |
 | `API_PORT` | `8001` | HTTP API 서버 포트 |
@@ -92,7 +92,7 @@ export API_HOST=0.0.0.0
 export API_PORT=8001
 export CAT_HOST=0.0.0.0
 export CAT_PORT=5000
-export COMM_TIMEOUT=30
+export COMM_TIMEOUT=120
 export SHUTDOWN_TIMEOUT=10
 export LOG_LEVEL=INFO
 export LOG_FORMAT=text

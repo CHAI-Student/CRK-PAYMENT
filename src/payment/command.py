@@ -10,7 +10,7 @@ to the CAT device and processing responses. All commands include:
 - Request/response logging
 
 Timeout behavior:
-- Uses COMM_TIMEOUT from config (default 30 seconds)
+- Uses COMM_TIMEOUT from config (default 120 seconds)
 - Raises TimeoutError if device doesn't respond in time
 - Can be overridden per-command if needed
 """
