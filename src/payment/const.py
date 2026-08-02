@@ -23,6 +23,18 @@ class MessageType(bytes, PyEnum):
     REQUEST = b"10"
     RESPONSE = b"20"
 
+
+class ControlFrame(bytes, PyEnum):
+    """Three-byte CAT control frames from the TCP-40 protocol."""
+
+    ENQ = b"\x05" * 3
+    ACK = b"\x06" * 3
+    EOT = b"\x04" * 3
+
+
+CONTROL_FRAME_TIMEOUT = 3.0
+
+
 class StatusCode(int, PyEnum):
     Y = 0x59  # 'Y'
     N = 0x4E  # 'N'

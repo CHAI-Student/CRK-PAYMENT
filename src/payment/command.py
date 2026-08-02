@@ -62,6 +62,21 @@ from .structure import Protocol
 logger = logging.getLogger(__name__)
 
 
+def _log_payment_recovery(service_code: ServiceCode, **fields) -> None:
+    """Write unmasked payment identifiers needed for manual recovery."""
+    field_text = " ".join(f"{name}={value}" for name, value in fields.items())
+    logger.info(
+        "PAYMENT_RECOVERY service_code=%s %s",
+        service_code.value,
+        field_text,
+        extra={
+            "payment_recovery": True,
+            "service_code": service_code.value,
+            **fields,
+        },
+    )
+
+
 def _validate_amount(amount: str, field_name: str = "amount") -> None:
     """
     Validate amount field format.
@@ -243,7 +258,11 @@ async def send_tx_token_generate(
         }
     )
     
-    response = await comm.fetch(request, timeout=timeout)
+    response = await comm.fetch(
+        request,
+        timeout=timeout,
+        control_handshake=True,
+    )
     _validate_response(response, ServiceCode.TX_TOKEN_GENERATE)
     
     try:
@@ -252,6 +271,14 @@ async def send_tx_token_generate(
         raise ProtocolError(
             response.payload.decode('euc-kr', errors='ignore')
         ) from e
+
+    _log_payment_recovery(
+        ServiceCode.TX_TOKEN_GENERATE,
+        phase="response",
+        vankey_hash=response_payload.vankey_hash,
+        status=response_payload.status.name,
+        response_code=response_payload.response_code.name,
+    )
     
     logger.info(
         "Token generated",
@@ -297,6 +324,13 @@ async def send_tx_token_approve(
         CommunicationError: If communication fails
     """
     _validate_amount(amount)
+
+    _log_payment_recovery(
+        ServiceCode.TX_TOKEN_APPROVE,
+        phase="request",
+        amount=amount,
+        vankey_hash=vankey_hash,
+    )
     
     logger.debug(
         "Sending TX_TOKEN_APPROVE request",
@@ -330,7 +364,11 @@ async def send_tx_token_approve(
         }
     )
     
-    response = await comm.fetch(request, timeout=timeout)
+    response = await comm.fetch(
+        request,
+        timeout=timeout,
+        control_handshake=True,
+    )
     _validate_response(response, ServiceCode.TX_TOKEN_APPROVE)
     
     try:
@@ -339,6 +377,17 @@ async def send_tx_token_approve(
         raise ProtocolError(
             response.payload.decode('euc-kr', errors='ignore')
         ) from e  
+
+    _log_payment_recovery(
+        ServiceCode.TX_TOKEN_APPROVE,
+        phase="response",
+        amount=amount,
+        authorization_number=response_payload.authorization_number,
+        vankey=response_payload.vankey,
+        vankey_hash=vankey_hash,
+        status=response_payload.status.name,
+        response_code=response_payload.response_code.name,
+    )
     
     logger.info(
         "Token payment approved",
@@ -390,6 +439,15 @@ async def send_tx_token_cancel(
     _validate_amount(amount)
     _validate_authorization_number(original_authorization_number, "original_authorization_number")
     _validate_authorization_date(original_authorization_date, "original_authorization_date")
+
+    _log_payment_recovery(
+        ServiceCode.TX_TOKEN_CANCEL,
+        phase="request",
+        amount=amount,
+        original_authorization_number=original_authorization_number,
+        original_authorization_date=original_authorization_date,
+        vankey_hash=vankey_hash,
+    )
     
     logger.debug(
         "Sending TX_TOKEN_CANCEL request",
@@ -416,7 +474,11 @@ async def send_tx_token_cancel(
         }
     )
     
-    response = await comm.fetch(request, timeout=timeout)
+    response = await comm.fetch(
+        request,
+        timeout=timeout,
+        control_handshake=True,
+    )
     _validate_response(response, ServiceCode.TX_TOKEN_CANCEL)
     
     try:
@@ -425,6 +487,18 @@ async def send_tx_token_cancel(
         raise ProtocolError(
             response.payload.decode('euc-kr', errors='ignore')
         ) from e  
+
+    _log_payment_recovery(
+        ServiceCode.TX_TOKEN_CANCEL,
+        phase="response",
+        amount=amount,
+        original_authorization_number=original_authorization_number,
+        original_authorization_date=original_authorization_date,
+        vankey=response_payload.vankey,
+        vankey_hash=vankey_hash,
+        status=response_payload.status.name,
+        response_code=response_payload.response_code.name,
+    )
     
     logger.info(
         "Token payment cancelled",
@@ -506,7 +580,11 @@ async def send_tx_spay_approve(
         }
     )
     
-    response = await comm.fetch(request, timeout=timeout)
+    response = await comm.fetch(
+        request,
+        timeout=timeout,
+        control_handshake=True,
+    )
     _validate_response(response, ServiceCode.TX_SPAY_APPROVE)
     
     try:
@@ -515,13 +593,23 @@ async def send_tx_spay_approve(
         raise ProtocolError(
             response.payload.decode('euc-kr', errors='ignore')
         ) from e  
+
+    _log_payment_recovery(
+        ServiceCode.TX_SPAY_APPROVE,
+        phase="response",
+        amount=amount,
+        authorization_type=authorization_type.name,
+        authorization_number=response_payload.authorization_number,
+        vankey=response_payload.vankey,
+        status=response_payload.status.name,
+        response_code=response_payload.response_code.name,
+    )
     
     logger.info(
         "Samsung Pay approved",
         extra={
             "status": response_payload.status,
             "auth_number": response_payload.authorization_number,
-            "vankey": response_payload.vankey,
             "response_code": response_payload.response_code.name,
         },
     )
@@ -567,6 +655,15 @@ async def send_tx_spay_cancel(
     _validate_amount(amount)
     _validate_authorization_number(original_authorization_number, "original_authorization_number")
     _validate_authorization_date(original_authorization_date, "original_authorization_date")
+
+    _log_payment_recovery(
+        ServiceCode.TX_SPAY_CANCEL,
+        phase="request",
+        amount=amount,
+        original_authorization_number=original_authorization_number,
+        original_authorization_date=original_authorization_date,
+        vankey=vankey,
+    )
     
     logger.debug(
         "Sending TX_SPAY_CANCEL request",
@@ -593,7 +690,11 @@ async def send_tx_spay_cancel(
         }
     )
     
-    response = await comm.fetch(request, timeout=timeout)
+    response = await comm.fetch(
+        request,
+        timeout=timeout,
+        control_handshake=True,
+    )
     _validate_response(response, ServiceCode.TX_SPAY_CANCEL)
 
     try:
@@ -602,6 +703,18 @@ async def send_tx_spay_cancel(
         raise ProtocolError(
             response.payload.decode('euc-kr', errors='ignore')
         ) from e  
+
+    _log_payment_recovery(
+        ServiceCode.TX_SPAY_CANCEL,
+        phase="response",
+        amount=amount,
+        original_authorization_number=original_authorization_number,
+        original_authorization_date=original_authorization_date,
+        vankey=vankey,
+        response_vankey=response_payload.vankey,
+        status=response_payload.status.name,
+        response_code=response_payload.response_code.name,
+    )
     
     
     logger.info(
