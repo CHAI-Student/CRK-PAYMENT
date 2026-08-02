@@ -13,9 +13,7 @@ All models include:
 
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-from payment.const import CardInfoData
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 # ============================================================================
@@ -82,6 +80,34 @@ class ProblemDetail(BaseModel):
 # ============================================================================
 # Common Models
 # ============================================================================
+
+
+class CardInfoData(BaseModel):
+    """Card information exposed by the REST and SSE boundaries."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    SERIAL_NUMBER: str = Field(
+        validation_alias=AliasChoices("SERIAL_NUMBER", "serial_number")
+    )
+    ACQUIRER_ID: str = Field(
+        validation_alias=AliasChoices("ACQUIRER_ID", "acquirer_id")
+    )
+    ACQUIRER_NAME: str = Field(
+        validation_alias=AliasChoices("ACQUIRER_NAME", "acquirer_name")
+    )
+    ISSUER_ID: str = Field(
+        validation_alias=AliasChoices("ISSUER_ID", "issuer_id")
+    )
+    ISSUER_NAME: str = Field(
+        validation_alias=AliasChoices("ISSUER_NAME", "issuer_name")
+    )
+    MERCHANT_ID: str = Field(
+        validation_alias=AliasChoices("MERCHANT_ID", "merchant_id")
+    )
+    DATE_TIME: str = Field(
+        validation_alias=AliasChoices("DATE_TIME", "date_time")
+    )
 
 
 class Item(BaseModel):

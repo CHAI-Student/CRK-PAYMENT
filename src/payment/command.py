@@ -16,50 +16,84 @@ Timeout behavior:
 """
 
 import logging
+from collections.abc import Sequence
 
 from construct import ConstructError
 
 from exceptions import ProtocolError, ValidationError
-
-from .payment_types import (
-    DeviceCheckData,
-    TxSPayApprovalData,
-    TxSPayCancelData,
-    TxTokenApprovalData,
-    TxTokenCancelData,
-    TxTokenData,
-)
 
 from .const import (
     AuthorizationType,
     MessageType,
     ResponseCode,
     ServiceCode,
-    build_card_info_data,
 )
 from .manager import Communication
+from .models import (
+    CardInfo,
+    DeviceCheckResult,
+    DeviceInitiatedRequest,
+    PaymentItem,
+    SamsungPayApprovalResult,
+    SamsungPayCancelResult,
+    TokenApprovalResult,
+    TokenCancelResult,
+    TokenGenerationResult,
+)
 from .payload import (
-    ItemInfo,
     DeviceCheckRequest,
     DeviceCheckResponse,
     ErrorPayload,
+    ItemInfo,
+    TransactionRFIDInitializeRequest,
     TransactionSPayApproveRequest,
     TransactionSPayApproveResponse,
     TransactionSPayCancelRequest,
     TransactionSPayCancelResponse,
-    TransactionSPayInitilizeRequest,
+    TransactionSPayInitializeRequest,
     TransactionTokenApproveRequest,
     TransactionTokenApproveResponse,
     TransactionTokenCancelRequest,
     TransactionTokenCancelResponse,
     TransactionTokenGenerateRequest,
     TransactionTokenGenerateResponse,
-    TransactionTokenInitilizeRequest,
-    TransactionRFIDInitilizeRequest,
+    TransactionTokenInitializeRequest,
 )
-from .structure import Protocol
+from .structure import ProtocolFrame
 
 logger = logging.getLogger(__name__)
+
+
+def _to_card_info(card_info) -> CardInfo | None:
+    if card_info is None or isinstance(card_info, str):
+        return None
+    return CardInfo(
+        serial_number=card_info.serial_number,
+        acquirer_id=card_info.acquirer_id,
+        acquirer_name=card_info.acquirer_name,
+        issuer_id=card_info.issuer_id,
+        issuer_name=card_info.issuer_name,
+        merchant_id=card_info.merchant_id,
+        date_time=card_info.date_time,
+    )
+
+
+def _build_item_message(items: Sequence[PaymentItem]) -> bytes:
+    chunks = []
+    for item in items:
+        name = item.name.encode("euc-kr", errors="ignore")[:10].ljust(10, b"\x00")
+        quantity = str(item.quantity).encode("ascii")[:2].ljust(2, b"\x00")
+        total_price = str(item.total_price).encode("ascii")[:6].ljust(6, b"\x00")
+        chunks.append(
+            ItemInfo.build(
+                {
+                    "name": name,
+                    "quantity": quantity,
+                    "total_price": total_price,
+                }
+            )
+        )
+    return b"".join(chunks)
 
 
 def _log_payment_recovery(service_code: ServiceCode, **fields) -> None:
@@ -197,7 +231,7 @@ def _validate_response(
         )
 
 
-async def retrieve_request(comm: Communication):
+async def retrieve_request(comm: Communication) -> DeviceInitiatedRequest:
     while True:
         message = await comm.read_request()
 
@@ -208,11 +242,11 @@ async def retrieve_request(comm: Communication):
         service_code = ServiceCode(message.service_code)
 
         if service_code == ServiceCode.TX_TOKEN_INIT:
-            payload_struct = TransactionTokenInitilizeRequest
+            payload_struct = TransactionTokenInitializeRequest
         elif service_code == ServiceCode.TX_SPAY_INIT:
-            payload_struct = TransactionSPayInitilizeRequest
+            payload_struct = TransactionSPayInitializeRequest
         elif service_code == ServiceCode.TX_RFID_INIT:
-            payload_struct = TransactionRFIDInitilizeRequest
+            payload_struct = TransactionRFIDInitializeRequest
         else:
             logger.error("Service code %s not implemented yet", service_code)
             continue
@@ -220,14 +254,22 @@ async def retrieve_request(comm: Communication):
         break
 
     payload = payload_struct.parse(message.payload)
+    rfid_data = (
+        payload.data
+        if service_code == ServiceCode.TX_RFID_INIT
+        else None
+    )
 
-    return message, payload
+    return DeviceInitiatedRequest(
+        service_code=service_code,
+        rfid_data=rfid_data,
+    )
 
 
 async def send_tx_token_generate(
     comm: Communication,
     timeout: float | None = None,
-) -> TxTokenData:
+) -> TokenGenerationResult:
     """
     Request token generation from CAT device.
     
@@ -250,7 +292,7 @@ async def send_tx_token_generate(
             "message": "",
         }
     )
-    request = Protocol.build(
+    request = ProtocolFrame.build(
         {
             "service_code": ServiceCode.TX_TOKEN_GENERATE.value,
             "message_type": MessageType.REQUEST,
@@ -288,10 +330,10 @@ async def send_tx_token_generate(
         },
     )
     
-    return TxTokenData(
+    return TokenGenerationResult(
         status=response_payload.status,
         vankey_hash=response_payload.vankey_hash,
-        card_info=build_card_info_data(response_payload.card_info),
+        card_info=_to_card_info(response_payload.card_info),
         response_code=response_payload.response_code,
         message=response_payload.message,
     )
@@ -301,9 +343,9 @@ async def send_tx_token_approve(
     comm: Communication,
     amount: str,
     vankey_hash: str,
-    items: list[dict],
+    items: Sequence[PaymentItem],
     timeout: float | None = None,
-) -> TxTokenApprovalData:
+) -> TokenApprovalResult:
     """
     Approve token payment transaction.
     
@@ -337,17 +379,7 @@ async def send_tx_token_approve(
         extra={"amount": amount, "vankey_hash_len": len(vankey_hash)},
     )
 
-    message = b''
-
-    for item in items:
-        name = str(item.get("name", "")).encode("euc-kr", errors="ignore")[:10].ljust(10, b'\x00')
-        quantity = str(item.get("quantity", 0)).encode("ascii", errors="ignore")[:2].ljust(2, b'\x00')
-        total_price = str(item.get("total_price", "")).encode("ascii", errors="ignore")[:6].ljust(6, b'\x00')
-        message += ItemInfo.build({
-            "name": name,
-            "quantity": quantity,
-            "total_price": total_price,
-        })
+    message = _build_item_message(items)
     
     request_payload = TransactionTokenApproveRequest.build(
         {
@@ -356,7 +388,7 @@ async def send_tx_token_approve(
             "message": message,
         }
     )
-    request = Protocol.build(
+    request = ProtocolFrame.build(
         {
             "service_code": ServiceCode.TX_TOKEN_APPROVE.value,
             "message_type": MessageType.REQUEST,
@@ -398,10 +430,10 @@ async def send_tx_token_approve(
         },
     )
     
-    return TxTokenApprovalData(
+    return TokenApprovalResult(
         status=response_payload.status,
         authorization_number=response_payload.authorization_number,
-        card_info=build_card_info_data(response_payload.card_info),
+        card_info=_to_card_info(response_payload.card_info),
         vankey=response_payload.vankey,
         response_code=response_payload.response_code,
         message=response_payload.message,
@@ -415,7 +447,7 @@ async def send_tx_token_cancel(
     original_authorization_date: str,
     vankey_hash: str,
     timeout: float | None = None,
-) -> TxTokenCancelData:
+) -> TokenCancelResult:
     """
     Cancel token payment transaction.
     
@@ -466,7 +498,7 @@ async def send_tx_token_cancel(
             "vankey_hash": vankey_hash,
         }
     )
-    request = Protocol.build(
+    request = ProtocolFrame.build(
         {
             "service_code": ServiceCode.TX_TOKEN_CANCEL.value,
             "message_type": MessageType.REQUEST,
@@ -508,9 +540,9 @@ async def send_tx_token_cancel(
         },
     )
     
-    return TxTokenCancelData(
+    return TokenCancelResult(
         status=response_payload.status,
-        card_info=build_card_info_data(response_payload.card_info),
+        card_info=_to_card_info(response_payload.card_info),
         vankey=response_payload.vankey,
         response_code=response_payload.response_code,
         message=response_payload.message,
@@ -521,9 +553,9 @@ async def send_tx_spay_approve(
     comm: Communication,
     amount: str,
     authorization_type: AuthorizationType,
-    items: list[dict],
+    items: Sequence[PaymentItem],
     timeout: float | None = None,
-) -> TxSPayApprovalData:
+) -> SamsungPayApprovalResult:
     """
     Approve Samsung Pay transaction.
     
@@ -553,17 +585,7 @@ async def send_tx_spay_approve(
         },
     )
 
-    message = b''
-
-    for item in items:
-        name = str(item.get("name", "")).encode("euc-kr", errors="ignore")[:10].ljust(10, b'\x00')
-        quantity = str(item.get("quantity", 0)).encode("ascii", errors="ignore")[:2].ljust(2, b'\x00')
-        total_price = str(item.get("total_price", "")).encode("ascii", errors="ignore")[:6].ljust(6, b'\x00')
-        message += ItemInfo.build({
-            "name": name,
-            "quantity": quantity,
-            "total_price": total_price,
-        })
+    message = _build_item_message(items)
     
     request_payload = TransactionSPayApproveRequest.build(
         {
@@ -572,7 +594,7 @@ async def send_tx_spay_approve(
             "message": message,
         }
     )
-    request = Protocol.build(
+    request = ProtocolFrame.build(
         {
             "service_code": ServiceCode.TX_SPAY_APPROVE.value,
             "message_type": MessageType.REQUEST,
@@ -614,10 +636,10 @@ async def send_tx_spay_approve(
         },
     )
     
-    return TxSPayApprovalData(
+    return SamsungPayApprovalResult(
         status=response_payload.status,
         authorization_number=response_payload.authorization_number,
-        card_info=build_card_info_data(response_payload.card_info),
+        card_info=_to_card_info(response_payload.card_info),
         vankey=response_payload.vankey,
         response_code=response_payload.response_code,
         message=response_payload.message,
@@ -631,7 +653,7 @@ async def send_tx_spay_cancel(
     original_authorization_date: str,
     vankey: str,
     timeout: float | None = None,
-) -> TxSPayCancelData:
+) -> SamsungPayCancelResult:
     """
     Cancel Samsung Pay transaction.
     
@@ -682,7 +704,7 @@ async def send_tx_spay_cancel(
             "vankey": vankey,
         }
     )
-    request = Protocol.build(
+    request = ProtocolFrame.build(
         {
             "service_code": ServiceCode.TX_SPAY_CANCEL.value,
             "message_type": MessageType.REQUEST,
@@ -725,9 +747,9 @@ async def send_tx_spay_cancel(
         },
     )
     
-    return TxSPayCancelData(
+    return SamsungPayCancelResult(
         status=response_payload.status,
-        card_info=build_card_info_data(response_payload.card_info),
+        card_info=_to_card_info(response_payload.card_info),
         vankey=response_payload.vankey,
         response_code=response_payload.response_code,
         message=response_payload.message,
@@ -737,7 +759,7 @@ async def send_tx_spay_cancel(
 async def send_device_check(
     comm: Communication,
     timeout: float | None = None,
-) -> DeviceCheckData:
+) -> DeviceCheckResult:
     """
     Perform device health check.
     
@@ -760,7 +782,7 @@ async def send_device_check(
             "message": "",
         }
     )
-    request = Protocol.build(
+    request = ProtocolFrame.build(
         {
             "service_code": ServiceCode.DEVICE_CHECK.value,
             "message_type": MessageType.REQUEST,
@@ -777,7 +799,7 @@ async def send_device_check(
             "Device check complete",
             extra={"response_code": response_payload.response_code.name},
         )
-        return DeviceCheckData(
+        return DeviceCheckResult(
             response_code=response_payload.response_code,
         )
     except ConstructError:
@@ -792,7 +814,7 @@ async def send_device_check(
                 "message": error_payload.message,
             },
         )
-        return DeviceCheckData(
+        return DeviceCheckResult(
             response_code=error_payload.response_code,
         )
     except ConstructError:
@@ -810,6 +832,6 @@ async def send_device_check(
         "Device check complete",
         extra={"response_code": response_payload.response_code.name},
     )
-    return DeviceCheckData(
+    return DeviceCheckResult(
         response_code=response_payload.response_code,
     )

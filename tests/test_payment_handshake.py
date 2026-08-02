@@ -32,11 +32,11 @@ from payment.payload import (
     TransactionTokenCancelResponse,
     TransactionTokenGenerateResponse,
 )
-from payment.structure import Length, Protocol
+from payment.structure import FrameLength, ProtocolFrame
 
 
 def build_protocol(service_code: str, message_type: MessageType) -> bytes:
-    return Protocol.build(
+    return ProtocolFrame.build(
         {
             "service_code": service_code,
             "message_type": message_type,
@@ -48,7 +48,7 @@ def build_protocol(service_code: str, message_type: MessageType) -> bytes:
 async def read_protocol_bytes(reader: asyncio.StreamReader) -> bytes:
     stx = await reader.readexactly(1)
     length_bytes = await reader.readexactly(2)
-    length = Length.parse(length_bytes)
+    length = FrameLength.parse(length_bytes)
     remaining = await reader.readexactly(length - 3)
     return stx + length_bytes + remaining
 
@@ -522,8 +522,8 @@ class CommandHandshakeSelectionTests(unittest.IsolatedAsyncioTestCase):
 class PaymentRecoveryLoggingTests(unittest.IsolatedAsyncioTestCase):
     @staticmethod
     def response(service_code, payload):
-        return Protocol.parse(
-            Protocol.build(
+        return ProtocolFrame.parse(
+            ProtocolFrame.build(
                 {
                     "service_code": service_code,
                     "message_type": MessageType.RESPONSE,

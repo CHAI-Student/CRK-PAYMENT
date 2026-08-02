@@ -7,14 +7,15 @@ from construct import ConstructError
 from exceptions import CommunicationError, TimeoutError as PaymentTimeoutError
 
 from .const import (
-    CONTROL_FRAME_TIMEOUT,
     STX,
     ControlFrame,
     MessageType,
 )
-from .structure import Length, Protocol
+from .structure import FrameLength, ProtocolFrame
 
 logger = logging.getLogger(__name__)
+
+CONTROL_FRAME_TIMEOUT = 3.0
 
 
 async def _read_and_parse(
@@ -28,7 +29,7 @@ async def _read_and_parse(
 
     length_bytes = await reader.readexactly(2)
     try:
-        length = Length.parse(length_bytes)
+        length = FrameLength.parse(length_bytes)
     except ConstructError as e:
         raise ValueError(f"Length parse error: {e}") from e
 
@@ -39,7 +40,7 @@ async def _read_and_parse(
 
     raw_request = stx_byte + length_bytes + remaining_bytes
     try:
-        request = Protocol.parse(raw_request)
+        request = ProtocolFrame.parse(raw_request)
     except ConstructError as e:
         raise ValueError(f"Protocol parse error: {e}") from e
 
