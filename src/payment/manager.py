@@ -172,6 +172,13 @@ class Communication:
                         extra={"service_code": service_code, "phase": phase},
                     )
 
+                    logger.info(
+                        "CAT_TX service=%s phase=%s bytes=%d hex=%s",
+                        service_code,
+                        phase,
+                        len(message),
+                        message.hex(" "),
+                    )
                     self.writer.write(message)
                     await self.writer.drain()
                     if not completion.done():
